@@ -76,8 +76,9 @@ h2, h3 {
 }
 
 .brand {
-  font-size: 32px;
+  font-size: 26px;
   font-weight: 800;
+  line-height: 1.25;
 }
 
 .brand-program {
@@ -142,22 +143,10 @@ h2, h3 {
   align-items: center;
 }
 
-.project-setup-summary > div {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-
 .project-name {
   font-size: 15px;
   font-weight: 700;
   color: var(--text-h);
-}
-
-.project-release {
-  font-size: 13px;
-  color: var(--text-faint);
-  font-weight: 600;
 }
 
 .capacity-form {

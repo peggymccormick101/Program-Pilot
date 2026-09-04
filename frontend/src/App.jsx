@@ -70,7 +70,7 @@ function StepRow({ node, busyId, nodeErrors, onComplete, onRun, onReopen, onSubm
         {node.description && <p className="step-description">{node.description}</p>}
         {error && <p className="step-error">{error}</p>}
 
-        {node.output && node.status === "complete" && node.title === "Provide Development Capacity" && (
+        {node.output && node.status === "complete" && node.title === "Provide Per Release Development Capacity" && (
           <p className="step-result">{formatCapacity(node.output)}</p>
         )}
         {node.output_file_id && (
@@ -162,22 +162,18 @@ function PhaseCard({ phase, active, ...actions }) {
 
 function ProjectSetup({ project, onSave, saving }) {
   const [name, setName] = useState(project.name || "");
-  const [releaseNumber, setReleaseNumber] = useState(project.release_number || "");
-  const [editing, setEditing] = useState(!project.release_number);
+  const [editing, setEditing] = useState(false);
 
   function submit(e) {
     e.preventDefault();
-    onSave({ name, release_number: releaseNumber });
+    onSave({ name });
     setEditing(false);
   }
 
   if (!editing) {
     return (
       <div className="project-setup project-setup-summary">
-        <div>
-          <span className="project-name">{project.name}</span>
-          <span className="project-release">Release {project.release_number}</span>
-        </div>
+        <span className="project-name">{project.name}</span>
         <button className="ghost-button" onClick={() => setEditing(true)}>
           Edit
         </button>
@@ -188,18 +184,8 @@ function ProjectSetup({ project, onSave, saving }) {
   return (
     <form className="project-setup" onSubmit={submit}>
       <label>
-        Project name
+        Program name
         <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
-      </label>
-      <label>
-        Release number
-        <input
-          type="text"
-          placeholder="e.g. 2026.1"
-          value={releaseNumber}
-          onChange={(e) => setReleaseNumber(e.target.value)}
-          required
-        />
       </label>
       <button type="submit" disabled={saving}>
         {saving ? "Saving..." : "Save"}
@@ -292,7 +278,7 @@ export default function App() {
     <div className="app-shell">
       <header className="app-header">
         <div className="brand">
-          <span className="brand-program">Program</span> <span className="brand-pilot">Pilot</span>
+          <span className="brand-program">Program Management</span> <span className="brand-pilot">AI Assistant</span>
         </div>
         <p className="tagline">Plan Smarter | Align Teams | Execute with Confidence | Deliver Impact</p>
       </header>

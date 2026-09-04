@@ -27,14 +27,21 @@ def get_client() -> anthropic.Anthropic:
 
 
 def _run_structured(system: str, user_content: str, schema: dict, max_tokens: int) -> dict:
+    # Streamed rather than a single blocking call -- generate_roadmap_options
+    # asks for a large structured response (max_tokens=8192), and a plain
+    # non-streaming request that size risks tripping Render's own request
+    # timeout before Claude finishes, which looked like the step silently
+    # failing (no output file, step just reset to available).
     client = get_client()
-    response = client.messages.create(
+    with client.messages.stream(
         model=MODEL,
         max_tokens=max_tokens,
         system=system,
         output_config={"format": {"type": "json_schema", "schema": schema}},
         messages=[{"role": "user", "content": user_content}],
-    )
+    ) as stream:
+        response = stream.get_final_message()
+
     text_blocks = [b.text for b in response.content if b.type == "text"]
     if not text_blocks:
         raise RuntimeError("Claude did not return a response.")

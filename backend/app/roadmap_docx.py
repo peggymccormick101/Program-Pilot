@@ -139,9 +139,7 @@ def _bullets(doc, items: list[str]):
         doc.add_paragraph(item, style="List Bullet")
 
 
-def build_roadmap_docx(
-    data: dict, program_name: str = "Program Pilot", release_number: str = None
-) -> bytes:
+def build_roadmap_docx(data: dict, program_name: str = "Program Pilot") -> bytes:
     doc = Document()
 
     title = doc.add_paragraph()
@@ -151,9 +149,8 @@ def build_roadmap_docx(
     run.font.size = Pt(26)
     run.font.color.rgb = NAVY
 
-    program_label = f"{program_name} — Release {release_number}" if release_number else program_name
     subtitle = doc.add_paragraph()
-    run = subtitle.add_run(f"Executive review | {program_label} | {date.today():%B %d, %Y}")
+    run = subtitle.add_run(f"Executive review | {program_name} | {date.today():%B %d, %Y}")
     run.font.size = Pt(12)
     run.font.color.rgb = GREY
     doc.add_paragraph()

@@ -71,11 +71,11 @@ PHASE_1_TASKS = [
                 ),
             },
             {
-                "title": "Provide Development Capacity",
+                "title": "Provide Per Release Development Capacity",
                 "automation_type": "input",
                 "description": (
                     "Enter the total available development capacity "
-                    "(front end and backend staff-days) for the release."
+                    "(front end and backend staff-days) per release."
                 ),
             },
             {
@@ -161,7 +161,7 @@ def seed_if_empty(db):
     if db.query(Project).first():
         return
 
-    project = Project(name="Demo Program", release_number=None, jira_project_key="PB")
+    project = Project(name="Demo Program", jira_project_key="PB")
     db.add(project)
     db.flush()
 

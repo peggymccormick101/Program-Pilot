@@ -194,11 +194,11 @@ def reopen_node(node_id: int, db: Session = Depends(get_db)):
 
 @router.post("/workflow/nodes/{node_id}/capacity", response_model=schemas.WorkflowNodeOut)
 def submit_capacity(node_id: int, payload: schemas.CapacityInput, db: Session = Depends(get_db)):
-    """"Provide Development Capacity" isn't derived from Jira -- Jira
-    Feature estimates are how big each feature is, not how much the team
-    can do. Capacity is a fact only a person knows, so they enter it
-    directly here; it's then used as the assumed capacity per release in
-    the roadmap-options step."""
+    """"Provide Per Release Development Capacity" isn't derived from
+    Jira -- Jira Feature estimates are how big each feature is, not how
+    much the team can do. Capacity is a fact only a person knows, so
+    they enter it directly here; it's then used as the assumed capacity
+    per release in the roadmap-options step."""
     node = _get_leaf(db, node_id)
     if node.automation_type != "input":
         raise HTTPException(status_code=400, detail="This step doesn't take a capacity input.")
@@ -224,7 +224,7 @@ def _run_roadmap_options(db: Session, project: models.Project, node: models.Work
         db.query(models.WorkflowNode)
         .filter(
             models.WorkflowNode.project_id == project.id,
-            models.WorkflowNode.title == "Provide Development Capacity",
+            models.WorkflowNode.title == "Provide Per Release Development Capacity",
         )
         .first()
     )
@@ -232,9 +232,7 @@ def _run_roadmap_options(db: Session, project: models.Project, node: models.Work
     features = jira_client.search_features(project.jira_project_key or "")
     result = ai.generate_roadmap_options(features, capacity)
 
-    docx_bytes = roadmap_docx.build_roadmap_docx(
-        result, program_name=project.name, release_number=project.release_number
-    )
+    docx_bytes = roadmap_docx.build_roadmap_docx(result, program_name=project.name)
     file_id = f"{uuid.uuid4().hex}.docx"
     with open(os.path.join(GENERATED_FILES_DIR, file_id), "wb") as f:
         f.write(docx_bytes)

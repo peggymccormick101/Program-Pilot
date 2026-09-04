@@ -28,13 +28,11 @@ class ProjectOut(BaseModel):
 
     id: int
     name: str
-    release_number: Optional[str] = None
     jira_project_key: Optional[str] = None
 
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
-    release_number: Optional[str] = None
     jira_project_key: Optional[str] = None
 
 
