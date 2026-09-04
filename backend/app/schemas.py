@@ -28,6 +28,13 @@ class ProjectOut(BaseModel):
 
     id: int
     name: str
+    release_number: Optional[str] = None
+    jira_project_key: Optional[str] = None
+
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    release_number: Optional[str] = None
     jira_project_key: Optional[str] = None
 
 
@@ -39,3 +46,8 @@ class WorkflowOut(BaseModel):
 class RunNodeResult(BaseModel):
     node: WorkflowNodeOut
     error: Optional[str] = None
+
+
+class CapacityInput(BaseModel):
+    total_frontend_days: float
+    total_backend_days: float

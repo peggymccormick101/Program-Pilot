@@ -96,6 +96,22 @@ def _serialize(node: models.WorkflowNode, all_leaves_in_order: list[models.Workf
     )
 
 
+@router.get("/project", response_model=schemas.ProjectOut)
+def get_project(db: Session = Depends(get_db)):
+    return _get_project(db)
+
+
+@router.patch("/project", response_model=schemas.ProjectOut)
+def update_project(payload: schemas.ProjectUpdate, db: Session = Depends(get_db)):
+    project = _get_project(db)
+    updates = payload.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        setattr(project, field, value)
+    db.commit()
+    db.refresh(project)
+    return project
+
+
 @router.get("/workflow", response_model=schemas.WorkflowOut)
 def get_workflow(db: Session = Depends(get_db)):
     project = _get_project(db)
@@ -176,11 +192,31 @@ def reopen_node(node_id: int, db: Session = Depends(get_db)):
     return _serialize(node, _ordered_leaves(phase_1))
 
 
-def _run_dev_capacity(db: Session, project: models.Project, node: models.WorkflowNode) -> dict:
-    features = jira_client.search_features(project.jira_project_key or "")
-    result = ai.compute_dev_capacity(features)
-    node.output = json.dumps(result)
-    return result
+@router.post("/workflow/nodes/{node_id}/capacity", response_model=schemas.WorkflowNodeOut)
+def submit_capacity(node_id: int, payload: schemas.CapacityInput, db: Session = Depends(get_db)):
+    """"Provide Development Capacity" isn't derived from Jira -- Jira
+    Feature estimates are how big each feature is, not how much the team
+    can do. Capacity is a fact only a person knows, so they enter it
+    directly here; it's then used as the assumed capacity per release in
+    the roadmap-options step."""
+    node = _get_leaf(db, node_id)
+    if node.automation_type != "input":
+        raise HTTPException(status_code=400, detail="This step doesn't take a capacity input.")
+    _check_available(db, node)
+
+    node.output = json.dumps({
+        "total_frontend_days": payload.total_frontend_days,
+        "total_backend_days": payload.total_backend_days,
+    })
+    node.completed_at = datetime.utcnow()
+    db.commit()
+    db.refresh(node)
+    phase_1 = db.query(models.WorkflowNode).filter(
+        models.WorkflowNode.project_id == node.project_id,
+        models.WorkflowNode.parent_id.is_(None),
+        models.WorkflowNode.phase_number == 1,
+    ).first()
+    return _serialize(node, _ordered_leaves(phase_1))
 
 
 def _run_roadmap_options(db: Session, project: models.Project, node: models.WorkflowNode) -> dict:
@@ -196,7 +232,9 @@ def _run_roadmap_options(db: Session, project: models.Project, node: models.Work
     features = jira_client.search_features(project.jira_project_key or "")
     result = ai.generate_roadmap_options(features, capacity)
 
-    docx_bytes = roadmap_docx.build_roadmap_docx(result, program_name=project.name)
+    docx_bytes = roadmap_docx.build_roadmap_docx(
+        result, program_name=project.name, release_number=project.release_number
+    )
     file_id = f"{uuid.uuid4().hex}.docx"
     with open(os.path.join(GENERATED_FILES_DIR, file_id), "wb") as f:
         f.write(docx_bytes)
@@ -206,7 +244,6 @@ def _run_roadmap_options(db: Session, project: models.Project, node: models.Work
 
 
 RUNNERS = {
-    "Provide Development Capacity": _run_dev_capacity,
     "Generate Draft Roadmap Options": _run_roadmap_options,
 }
 

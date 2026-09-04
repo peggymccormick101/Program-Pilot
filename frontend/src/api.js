@@ -35,6 +35,17 @@ export function runNode(id) {
   return request(`/workflow/nodes/${id}/run`, { method: "POST" });
 }
 
+export function submitCapacity(id, payload) {
+  return request(`/workflow/nodes/${id}/capacity`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateProject(payload) {
+  return request("/project", { method: "PATCH", body: JSON.stringify(payload) });
+}
+
 export function downloadUrl(fileId) {
   return `/api/files/${fileId}`;
 }

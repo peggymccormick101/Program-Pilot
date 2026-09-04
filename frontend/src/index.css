@@ -100,18 +100,91 @@ h2, h3 {
   padding: 24px;
 }
 
-.project-name {
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-faint);
-  font-weight: 600;
-  margin: 0 0 16px;
-}
-
 .load-error {
   color: var(--red);
   font-weight: 600;
+}
+
+.project-setup {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.project-setup label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.project-setup input {
+  font: inherit;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--paper);
+  color: var(--text-h);
+}
+
+.project-setup-summary {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.project-setup-summary > div {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.project-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.project-release {
+  font-size: 13px;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+.capacity-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.capacity-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+.capacity-form input {
+  font: inherit;
+  width: 110px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--paper);
+  color: var(--text-h);
 }
 
 .phase-list {

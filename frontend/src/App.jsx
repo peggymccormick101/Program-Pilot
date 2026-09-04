@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { completeNode, downloadUrl, getWorkflow, reopenNode, runNode } from "./api.js";
+import {
+  completeNode,
+  downloadUrl,
+  getWorkflow,
+  reopenNode,
+  runNode,
+  submitCapacity,
+  updateProject,
+} from "./api.js";
 
 const PHASE_CLASS = {
   1: "phase-1",
@@ -14,9 +22,41 @@ function StatusBadge({ status }) {
   return <span className={`status-badge status-${status}`}>{label}</span>;
 }
 
-function StepRow({ node, busyId, nodeErrors, onComplete, onRun, onReopen }) {
+function CapacityForm({ node, busyId, onSubmitCapacity }) {
+  const [frontend, setFrontend] = useState("");
+  const [backend, setBackend] = useState("");
+  const isBusy = busyId === node.id;
+
+  function submit(e) {
+    e.preventDefault();
+    if (!frontend || !backend) return;
+    onSubmitCapacity(node.id, {
+      total_frontend_days: Number(frontend),
+      total_backend_days: Number(backend),
+    });
+  }
+
+  return (
+    <form className="capacity-form" onSubmit={submit}>
+      <label>
+        Frontend staff-days
+        <input type="number" min="0" step="1" value={frontend} onChange={(e) => setFrontend(e.target.value)} required />
+      </label>
+      <label>
+        Backend staff-days
+        <input type="number" min="0" step="1" value={backend} onChange={(e) => setBackend(e.target.value)} required />
+      </label>
+      <button type="submit" disabled={isBusy}>
+        {isBusy ? "Saving..." : "Submit"}
+      </button>
+    </form>
+  );
+}
+
+function StepRow({ node, busyId, nodeErrors, onComplete, onRun, onReopen, onSubmitCapacity }) {
   const isBusy = busyId === node.id;
   const isAutomated = node.automation_type === "automated";
+  const isInput = node.automation_type === "input";
   const error = nodeErrors[node.id];
 
   return (
@@ -37,6 +77,10 @@ function StepRow({ node, busyId, nodeErrors, onComplete, onRun, onReopen }) {
           <a className="step-download" href={downloadUrl(node.output_file_id)}>
             Download roadmap options (.docx)
           </a>
+        )}
+
+        {node.status === "available" && isInput && (
+          <CapacityForm node={node} busyId={busyId} onSubmitCapacity={onSubmitCapacity} />
         )}
       </div>
 
@@ -64,7 +108,7 @@ function StepRow({ node, busyId, nodeErrors, onComplete, onRun, onReopen }) {
 function formatCapacity(outputJson) {
   try {
     const data = JSON.parse(outputJson);
-    return `Total capacity: ${data.total_frontend_days} frontend / ${data.total_backend_days} backend staff-days across ${data.feature_count} feature(s).`;
+    return `Assumed capacity: ${data.total_frontend_days} frontend / ${data.total_backend_days} backend staff-days per release.`;
   } catch {
     return null;
   }
@@ -116,11 +160,60 @@ function PhaseCard({ phase, active, ...actions }) {
   );
 }
 
+function ProjectSetup({ project, onSave, saving }) {
+  const [name, setName] = useState(project.name || "");
+  const [releaseNumber, setReleaseNumber] = useState(project.release_number || "");
+  const [editing, setEditing] = useState(!project.release_number);
+
+  function submit(e) {
+    e.preventDefault();
+    onSave({ name, release_number: releaseNumber });
+    setEditing(false);
+  }
+
+  if (!editing) {
+    return (
+      <div className="project-setup project-setup-summary">
+        <div>
+          <span className="project-name">{project.name}</span>
+          <span className="project-release">Release {project.release_number}</span>
+        </div>
+        <button className="ghost-button" onClick={() => setEditing(true)}>
+          Edit
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form className="project-setup" onSubmit={submit}>
+      <label>
+        Project name
+        <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
+      </label>
+      <label>
+        Release number
+        <input
+          type="text"
+          placeholder="e.g. 2026.1"
+          value={releaseNumber}
+          onChange={(e) => setReleaseNumber(e.target.value)}
+          required
+        />
+      </label>
+      <button type="submit" disabled={saving}>
+        {saving ? "Saving..." : "Save"}
+      </button>
+    </form>
+  );
+}
+
 export default function App() {
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [nodeErrors, setNodeErrors] = useState({});
+  const [savingProject, setSavingProject] = useState(false);
 
   async function refresh() {
     try {
@@ -172,6 +265,29 @@ export default function App() {
     }
   }
 
+  async function handleSubmitCapacity(id, payload) {
+    setBusyId(id);
+    setNodeErrors((prev) => ({ ...prev, [id]: null }));
+    try {
+      await submitCapacity(id, payload);
+      await refresh();
+    } catch (e) {
+      setNodeErrors((prev) => ({ ...prev, [id]: e.message }));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleSaveProject(payload) {
+    setSavingProject(true);
+    try {
+      await updateProject(payload);
+      await refresh();
+    } finally {
+      setSavingProject(false);
+    }
+  }
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -186,7 +302,7 @@ export default function App() {
 
         {data && (
           <>
-            <p className="project-name">{data.project.name}</p>
+            <ProjectSetup project={data.project} onSave={handleSaveProject} saving={savingProject} />
             <div className="phase-list">
               {data.phases.map((phase) => (
                 <PhaseCard
@@ -198,6 +314,7 @@ export default function App() {
                   onComplete={handleComplete}
                   onReopen={handleReopen}
                   onRun={handleRun}
+                  onSubmitCapacity={handleSubmitCapacity}
                 />
               ))}
             </div>

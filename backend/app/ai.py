@@ -41,46 +41,6 @@ def _run_structured(system: str, user_content: str, schema: dict, max_tokens: in
     return json.loads(text_blocks[-1])
 
 
-DEV_CAPACITY_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "total_frontend_days": {
-            "type": "number",
-            "description": "Sum of frontend story-point estimates across all Feature issues provided, in staff-days.",
-        },
-        "total_backend_days": {
-            "type": "number",
-            "description": "Sum of backend story-point estimates across all Feature issues provided, in staff-days.",
-        },
-        "feature_count": {"type": "integer"},
-        "notes": {
-            "type": "string",
-            "description": "Any Features missing an estimate, or other caveats worth flagging.",
-        },
-    },
-    "required": ["total_frontend_days", "total_backend_days", "feature_count", "notes"],
-    "additionalProperties": False,
-}
-
-
-def compute_dev_capacity(features: list[dict]) -> dict:
-    """Step vi, "Provide Development Capacity": total the front end and
-    backend estimates already entered on each Feature issue in Jira."""
-    return _run_structured(
-        system=(
-            "You are a program-management assistant. Collect total "
-            "available development capacity for a release, split by "
-            "front end and backend, from the Jira Feature data provided. "
-            "Sum the Prod Mgmt Frontend Estimate and Prod Mgmt Backend "
-            "Estimate fields across every Feature. Do not invent values "
-            "for Features missing an estimate -- note them instead."
-        ),
-        user_content=f"Feature issues (JSON):\n{json.dumps(features, indent=2)}",
-        schema=DEV_CAPACITY_SCHEMA,
-        max_tokens=1024,
-    )
-
-
 ROADMAP_RELEASE_SCHEMA = {
     "type": "object",
     "properties": {

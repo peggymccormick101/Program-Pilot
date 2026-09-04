@@ -11,6 +11,7 @@ class Project(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
+    release_number = Column(String, nullable=True)
     jira_project_key = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

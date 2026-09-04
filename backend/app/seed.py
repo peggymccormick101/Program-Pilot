@@ -17,11 +17,6 @@ For each option, show Features by release, capacity use, sequencing rationale, k
 Compare the options, recommend one for PdM review, and deliver a concise, executive-style Microsoft Word document.
 Clearly state that the roadmap reflects Product intent based on preliminary estimates and is not a Development commitment."""
 
-DEV_CAPACITY_PROMPT = (
-    "Collect total available story points for the release, broken out by "
-    "front end and backend."
-)
-
 # Each entry: title, description, and for leaves: automation_type
 # ("manual" | "automated") plus ai_harness/ai_prompt when automated.
 PHASE_1_TASKS = [
@@ -77,12 +72,10 @@ PHASE_1_TASKS = [
             },
             {
                 "title": "Provide Development Capacity",
-                "automation_type": "automated",
-                "ai_harness": "claude",
-                "ai_prompt": DEV_CAPACITY_PROMPT,
+                "automation_type": "input",
                 "description": (
-                    "Claude totals the available development capacity "
-                    "(front end and backend story points) for the release."
+                    "Enter the total available development capacity "
+                    "(front end and backend staff-days) for the release."
                 ),
             },
             {
@@ -168,7 +161,7 @@ def seed_if_empty(db):
     if db.query(Project).first():
         return
 
-    project = Project(name="Demo Program", jira_project_key="PB")
+    project = Project(name="Demo Program", release_number=None, jira_project_key="PB")
     db.add(project)
     db.flush()
 
