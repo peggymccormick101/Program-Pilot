@@ -13,20 +13,25 @@ from typing import Optional
 
 import requests
 
-# Maps our internal field names to this Jira instance's custom field IDs.
-# PLACEHOLDERS -- replace with the real customfield_XXXXX ids once known.
+# Maps our internal field names to this Jira instance's custom field IDs
+# (peggymccormick101-pgmframework, project PB) -- read from the live
+# /api/jira/fields listing. Note there are two fields named "Impact" on
+# this instance (customfield_10083 and customfield_10093); 10093 is the
+# right one -- it sits in the same contiguous id block (10089-10104) as
+# every other Feature/RICE field below, while 10083 belongs to an
+# unrelated older field set.
 JIRA_FEATURE_FIELDS = {
-    "feature_id": "customfield_10001",
-    "feature_purpose": "customfield_10002",
-    "rice_score": "customfield_10003",
-    "reach": "customfield_10004",
-    "impact": "customfield_10005",
-    "confidence": "customfield_10006",
-    "pdm_effort_estimate": "customfield_10007",
-    "pdm_backend_estimate": "customfield_10008",
-    "pdm_frontend_estimate": "customfield_10009",
-    "feature_dependencies": "customfield_10010",
-    "rice_assumptions": "customfield_10011",
+    "feature_id": "customfield_10090",
+    "feature_purpose": "customfield_10091",
+    "rice_score": "customfield_10098",
+    "reach": "customfield_10092",
+    "impact": "customfield_10093",
+    "confidence": "customfield_10094",
+    "pdm_effort_estimate": "customfield_10100",
+    "pdm_backend_estimate": "customfield_10101",
+    "pdm_frontend_estimate": "customfield_10102",
+    "feature_dependencies": "customfield_10103",
+    "rice_assumptions": "customfield_10104",
 }
 
 
