@@ -168,7 +168,7 @@ def seed_if_empty(db):
     if db.query(Project).first():
         return
 
-    project = Project(name="Demo Program", jira_project_key=None)
+    project = Project(name="Demo Program", jira_project_key="PB")
     db.add(project)
     db.flush()
 
