@@ -82,7 +82,11 @@ def list_fields() -> list[dict]:
 
 def search_features(project_key: str, extra_jql: Optional[str] = None) -> list[dict]:
     """Return every Feature-type issue in the given project, with the
-    fields the roadmap-planning prompts need."""
+    fields the roadmap-planning prompts need.
+
+    Uses /rest/api/3/search/jql -- Atlassian removed the old
+    /rest/api/3/search endpoint (CHANGE-2046) in favor of this one, which
+    pages via nextPageToken instead of startAt."""
     base_url, email, api_token = _get_config()
 
     jql = f'project = "{project_key}" AND issuetype = "Feature"'
@@ -92,27 +96,38 @@ def search_features(project_key: str, extra_jql: Optional[str] = None) -> list[d
     custom_fields = list(JIRA_FEATURE_FIELDS.values())
     fields = ["summary", "description"] + custom_fields
 
-    response = requests.get(
-        f"{base_url}/rest/api/3/search",
-        headers={**_auth_header(email, api_token), "Accept": "application/json"},
-        params={"jql": jql, "fields": ",".join(fields), "maxResults": 200},
-        timeout=15,
-    )
-    if not response.ok:
-        raise JiraRequestError(
-            f"Jira search failed (status {response.status_code}): {response.text[:300]}"
-        )
-
-    issues = response.json().get("issues", [])
     results = []
-    for issue in issues:
-        f = issue.get("fields", {})
-        entry = {
-            "issue_key": issue.get("key"),
-            "summary": f.get("summary"),
-            "description": f.get("description"),
-        }
-        for name, field_id in JIRA_FEATURE_FIELDS.items():
-            entry[name] = f.get(field_id)
-        results.append(entry)
+    next_page_token = None
+    while True:
+        params = {"jql": jql, "fields": ",".join(fields), "maxResults": 200}
+        if next_page_token:
+            params["nextPageToken"] = next_page_token
+
+        response = requests.get(
+            f"{base_url}/rest/api/3/search/jql",
+            headers={**_auth_header(email, api_token), "Accept": "application/json"},
+            params=params,
+            timeout=15,
+        )
+        if not response.ok:
+            raise JiraRequestError(
+                f"Jira search failed (status {response.status_code}): {response.text[:300]}"
+            )
+
+        data = response.json()
+        for issue in data.get("issues", []):
+            f = issue.get("fields", {})
+            entry = {
+                "issue_key": issue.get("key"),
+                "summary": f.get("summary"),
+                "description": f.get("description"),
+            }
+            for name, field_id in JIRA_FEATURE_FIELDS.items():
+                entry[name] = f.get(field_id)
+            results.append(entry)
+
+        next_page_token = data.get("nextPageToken")
+        if not next_page_token or len(results) >= 1000:  # safety cap
+            break
+
     return results
