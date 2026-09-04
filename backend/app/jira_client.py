@@ -56,6 +56,30 @@ def _auth_header(email: str, api_token: str) -> dict:
     return {"Authorization": f"Basic {token}"}
 
 
+def list_fields() -> list[dict]:
+    """Every field on this Jira instance (name + id). Used by the
+    /api/jira/fields debug route to find the real customfield_XXXXX ids
+    for JIRA_FEATURE_FIELDS above -- no need to hunt through Jira admin
+    screens by hand."""
+    base_url, email, api_token = _get_config()
+    response = requests.get(
+        f"{base_url}/rest/api/3/field",
+        headers={**_auth_header(email, api_token), "Accept": "application/json"},
+        timeout=15,
+    )
+    if not response.ok:
+        raise JiraRequestError(
+            f"Jira field list failed (status {response.status_code}): {response.text[:300]}"
+        )
+    fields = response.json()
+    # Custom fields first (that's what we actually need to map), then
+    # sorted by name so it's easy to scan.
+    return sorted(
+        [{"id": f["id"], "name": f["name"], "custom": f.get("custom", False)} for f in fields],
+        key=lambda f: (not f["custom"], f["name"].lower()),
+    )
+
+
 def search_features(project_key: str, extra_jql: Optional[str] = None) -> list[dict]:
     """Return every Feature-type issue in the given project, with the
     fields the roadmap-planning prompts need."""

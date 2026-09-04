@@ -247,3 +247,12 @@ def download_file(file_id: str):
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         filename="Draft_Multi_Year_Roadmap_Options.docx",
     )
+
+
+@router.get("/jira/fields")
+def list_jira_fields():
+    """Setup helper: lists every field on the connected Jira instance so
+    the real customfield_XXXXX ids can be found and dropped into
+    JIRA_FEATURE_FIELDS in jira_client.py, instead of hunting through
+    Jira admin screens by hand."""
+    return _handle_errors(jira_client.list_fields)
