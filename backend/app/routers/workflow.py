@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app import ai, jira_client, models, roadmap_docx, schemas
+from app import ai, jira_client, jira_state, models, roadmap_docx, schemas
 from app.database import get_db
 
 router = APIRouter(prefix="/api", tags=["workflow"])
@@ -107,6 +107,14 @@ def update_project(payload: schemas.ProjectUpdate, db: Session = Depends(get_db)
     updates = payload.model_dump(exclude_unset=True)
     for field, value in updates.items():
         setattr(project, field, value)
+    # Jira is the durable store now -- don't commit the local change (and
+    # report success) if the Jira write itself failed, or the local copy
+    # silently drifts from what actually persists.
+    try:
+        _handle_errors(jira_state.sync_program_to_jira, db, project)
+    except HTTPException:
+        db.rollback()
+        raise
     db.commit()
     db.refresh(project)
     return project
@@ -211,8 +219,24 @@ def submit_capacity(node_id: int, payload: schemas.CapacityInput, db: Session = 
         "total_backend_days": payload.total_backend_days,
     })
     node.completed_at = datetime.utcnow()
+
+    project = db.query(models.Project).filter(models.Project.id == node.project_id).first()
+    try:
+        _handle_errors(
+            jira_state.sync_program_to_jira,
+            db,
+            project,
+            capacity={
+                "total_frontend_days": payload.total_frontend_days,
+                "total_backend_days": payload.total_backend_days,
+            },
+        )
+    except HTTPException:
+        db.rollback()
+        raise
     db.commit()
     db.refresh(node)
+
     phase_1 = db.query(models.WorkflowNode).filter(
         models.WorkflowNode.project_id == node.project_id,
         models.WorkflowNode.parent_id.is_(None),
@@ -240,6 +264,18 @@ def _run_roadmap_options(db: Session, project: models.Project, node: models.Work
         f.write(docx_bytes)
     node.output_file_id = file_id
     node.output = json.dumps({"recommended_option_name": result.get("recommended_option_name")})
+
+    # Ensure the program has a Jira issue to attach to (covers the edge
+    # case where roadmap options are generated before a name/capacity
+    # change has ever triggered issue creation), then attach the docx so
+    # it survives an ephemeral disk wipe too.
+    jira_state.sync_program_to_jira(db, project)
+    jira_client.attach_file(
+        project.jira_issue_key,
+        "Draft_Multi_Year_Roadmap_Options.docx",
+        docx_bytes,
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
     return result
 
 

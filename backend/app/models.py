@@ -12,6 +12,11 @@ class Project(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     jira_project_key = Column(String, nullable=True)
+    # Key of the Jira Task issue that holds this program's persisted state
+    # (name + capacity fields + the generated roadmap docx as an
+    # attachment) -- Render's free-tier disk is ephemeral, so this is how
+    # the program survives an instance restart.
+    jira_issue_key = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     nodes = relationship(

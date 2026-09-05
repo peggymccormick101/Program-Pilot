@@ -161,6 +161,14 @@ def seed_if_empty(db):
     if db.query(Project).first():
         return
 
+    # Render's free-tier disk is ephemeral -- a restart wipes this local
+    # database. Before seeding a blank demo program, check whether a real
+    # program's state already exists in Jira (it's the durable store) and
+    # rehydrate from that instead.
+    from app.jira_state import bootstrap_project
+    if bootstrap_project(db):
+        return
+
     project = Project(name="Demo Program", jira_project_key="PB")
     db.add(project)
     db.flush()

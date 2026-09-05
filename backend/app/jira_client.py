@@ -1,11 +1,13 @@
-"""Thin Jira Cloud REST client. Read-only for now (Phase 1 has no Jira
-write steps) -- add_comment/transition_issue/create_issue can be added
-once a later phase actually needs them.
+"""Thin Jira Cloud REST client.
 
 Custom field IDs are Jira-instance-specific (e.g. "customfield_10050")
 and unknown until the real instance is connected. JIRA_FEATURE_FIELDS
 below is a placeholder map -- swap in the real field IDs once we have
-them (Jira admin -> issue fields, or GET /rest/api/3/field)."""
+them (Jira admin -> issue fields, or GET /rest/api/3/field).
+
+create_issue/update_issue/attach_file back the "store program state in
+Jira" design: one Jira issue per Program Pilot program, holding its
+state and the generated roadmap docx as an attachment."""
 
 import os
 from base64 import b64encode
@@ -33,6 +35,22 @@ JIRA_FEATURE_FIELDS = {
     "feature_dependencies": "customfield_10103",
     "rice_assumptions": "customfield_10104",
 }
+
+
+# Program-level state is persisted on a Task issue (one per program),
+# reusing the same three fields Feature issues use for PdM estimates --
+# here they hold the user-entered frontend/backend capacity and their
+# total, not a per-feature estimate.
+PROGRAM_STATE_FIELDS = {
+    "frontend_estimate": JIRA_FEATURE_FIELDS["pdm_frontend_estimate"],
+    "backend_estimate": JIRA_FEATURE_FIELDS["pdm_backend_estimate"],
+    "effort_estimate": JIRA_FEATURE_FIELDS["pdm_effort_estimate"],
+}
+
+# Marks a Task issue as one of ours (vs. a real program-management Task a
+# person created) so find_program_state_issue can find it again after an
+# ephemeral restart wipes the local database.
+PROGRAM_STATE_LABEL = "program-pilot-state"
 
 
 class JiraNotConfiguredError(Exception):
@@ -83,6 +101,101 @@ def list_fields() -> list[dict]:
         [{"id": f["id"], "name": f["name"], "custom": f.get("custom", False)} for f in fields],
         key=lambda f: (not f["custom"], f["name"].lower()),
     )
+
+
+def create_issue(project_key: str, issue_type: str, fields: dict) -> str:
+    """Create an issue and return its key (e.g. "PB-42"). `fields` is
+    merged with project/issuetype into the standard
+    {"fields": {...}} create-issue body -- pass plain values for
+    system fields (e.g. "summary") and custom field ids
+    ("customfield_XXXXX") as keys for anything else."""
+    base_url, email, api_token = _get_config()
+    body = {
+        "fields": {
+            "project": {"key": project_key},
+            "issuetype": {"name": issue_type},
+            **fields,
+        }
+    }
+    response = requests.post(
+        f"{base_url}/rest/api/3/issue",
+        headers={**_auth_header(email, api_token), "Accept": "application/json", "Content-Type": "application/json"},
+        json=body,
+        timeout=15,
+    )
+    if not response.ok:
+        raise JiraRequestError(
+            f"Jira issue creation failed (status {response.status_code}): {response.text[:300]}"
+        )
+    return response.json()["key"]
+
+
+def update_issue(issue_key: str, fields: dict) -> None:
+    """Update fields on an existing issue. Same field-shape rules as
+    create_issue."""
+    base_url, email, api_token = _get_config()
+    response = requests.put(
+        f"{base_url}/rest/api/3/issue/{issue_key}",
+        headers={**_auth_header(email, api_token), "Accept": "application/json", "Content-Type": "application/json"},
+        json={"fields": fields},
+        timeout=15,
+    )
+    if not response.ok:
+        raise JiraRequestError(
+            f"Jira issue update failed (status {response.status_code}): {response.text[:300]}"
+        )
+
+
+def attach_file(issue_key: str, filename: str, content: bytes, content_type: str) -> None:
+    """Attach a file (e.g. the generated roadmap docx) to an issue."""
+    base_url, email, api_token = _get_config()
+    response = requests.post(
+        f"{base_url}/rest/api/3/issue/{issue_key}/attachments",
+        headers={**_auth_header(email, api_token), "X-Atlassian-Token": "no-check"},
+        files={"file": (filename, content, content_type)},
+        timeout=30,
+    )
+    if not response.ok:
+        raise JiraRequestError(
+            f"Jira attachment upload failed (status {response.status_code}): {response.text[:300]}"
+        )
+
+
+def find_program_state_issue(project_key: str) -> Optional[dict]:
+    """Look up the most recently updated program-pilot-state Task issue in
+    this project, if one exists -- used on boot to rehydrate a program
+    after the local (ephemeral) database has been wiped by a restart.
+    Returns {"issue_key", "name", "frontend_estimate", "backend_estimate"}
+    or None if no such issue exists yet."""
+    base_url, email, api_token = _get_config()
+
+    jql = (
+        f'project = "{project_key}" AND issuetype = Task '
+        f'AND labels = "{PROGRAM_STATE_LABEL}" ORDER BY updated DESC'
+    )
+    fields = ["summary"] + list(PROGRAM_STATE_FIELDS.values())
+    response = requests.get(
+        f"{base_url}/rest/api/3/search/jql",
+        headers={**_auth_header(email, api_token), "Accept": "application/json"},
+        params={"jql": jql, "fields": ",".join(fields), "maxResults": 1},
+        timeout=15,
+    )
+    if not response.ok:
+        raise JiraRequestError(
+            f"Jira program-state lookup failed (status {response.status_code}): {response.text[:300]}"
+        )
+    issues = response.json().get("issues", [])
+    if not issues:
+        return None
+
+    issue = issues[0]
+    f = issue.get("fields", {})
+    return {
+        "issue_key": issue["key"],
+        "name": f.get("summary"),
+        "frontend_estimate": f.get(PROGRAM_STATE_FIELDS["frontend_estimate"]),
+        "backend_estimate": f.get(PROGRAM_STATE_FIELDS["backend_estimate"]),
+    }
 
 
 def search_features(project_key: str, extra_jql: Optional[str] = None) -> list[dict]:
