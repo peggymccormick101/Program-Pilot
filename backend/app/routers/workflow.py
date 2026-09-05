@@ -140,7 +140,7 @@ def _get_leaf(db: Session, node_id: int) -> models.WorkflowNode:
     return node
 
 
-def _check_available(db: Session, node: models.WorkflowNode):
+def _check_available(db: Session, node: models.WorkflowNode, allow_complete: bool = False):
     project = db.query(models.Project).filter(models.Project.id == node.project_id).first()
     phase_1 = (
         db.query(models.WorkflowNode)
@@ -154,7 +154,9 @@ def _check_available(db: Session, node: models.WorkflowNode):
     all_leaves_in_order = _ordered_leaves(phase_1) if phase_1 else []
     if node not in all_leaves_in_order:
         raise HTTPException(status_code=400, detail="This step isn't part of the active phase yet.")
-    if _node_status(node, all_leaves_in_order) != "available":
+    status = _node_status(node, all_leaves_in_order)
+    ok_statuses = {"available", "complete"} if allow_complete else {"available"}
+    if status not in ok_statuses:
         raise HTTPException(status_code=409, detail="Complete the earlier steps first.")
 
 
@@ -202,7 +204,7 @@ def submit_capacity(node_id: int, payload: schemas.CapacityInput, db: Session = 
     node = _get_leaf(db, node_id)
     if node.automation_type != "input":
         raise HTTPException(status_code=400, detail="This step doesn't take a capacity input.")
-    _check_available(db, node)
+    _check_available(db, node, allow_complete=True)
 
     node.output = json.dumps({
         "total_frontend_days": payload.total_frontend_days,

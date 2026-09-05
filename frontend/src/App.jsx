@@ -23,10 +23,21 @@ function StatusBadge({ status }) {
   return <span className={`status-badge status-${status}`}>{label}</span>;
 }
 
+function parseCapacity(outputJson) {
+  try {
+    const data = JSON.parse(outputJson);
+    return { frontend: String(data.total_frontend_days ?? ""), backend: String(data.total_backend_days ?? "") };
+  } catch {
+    return { frontend: "", backend: "" };
+  }
+}
+
 function CapacityForm({ node, busyId, onSubmitCapacity }) {
-  const [frontend, setFrontend] = useState("");
-  const [backend, setBackend] = useState("");
+  const existing = node.output ? parseCapacity(node.output) : { frontend: "", backend: "" };
+  const [frontend, setFrontend] = useState(existing.frontend);
+  const [backend, setBackend] = useState(existing.backend);
   const isBusy = busyId === node.id;
+  const isEditing = node.status === "complete";
 
   function submit(e) {
     e.preventDefault();
@@ -48,7 +59,7 @@ function CapacityForm({ node, busyId, onSubmitCapacity }) {
         <input type="number" min="0" step="1" value={backend} onChange={(e) => setBackend(e.target.value)} required />
       </label>
       <button type="submit" disabled={isBusy}>
-        {isBusy ? "Saving..." : "Submit"}
+        {isBusy ? "Saving..." : isEditing ? "Save" : "Submit"}
       </button>
     </form>
   );
@@ -71,16 +82,13 @@ function StepRow({ node, busyId, nodeErrors, onComplete, onRun, onReopen, onSubm
         {node.description && <p className="step-description">{node.description}</p>}
         {error && <p className="step-error">{error}</p>}
 
-        {node.output && node.status === "complete" && node.title === "Provide Per Release Development Capacity" && (
-          <p className="step-result">{formatCapacity(node.output)}</p>
-        )}
         {node.output_file_id && (
           <a className="step-download" href={downloadUrl(node.output_file_id)}>
             Download roadmap options (.docx)
           </a>
         )}
 
-        {node.status === "available" && isInput && (
+        {isInput && (node.status === "available" || node.status === "complete") && (
           <CapacityForm node={node} busyId={busyId} onSubmitCapacity={onSubmitCapacity} />
         )}
       </div>
@@ -96,7 +104,7 @@ function StepRow({ node, busyId, nodeErrors, onComplete, onRun, onReopen, onSubm
             {isBusy ? "Running..." : "Run"}
           </button>
         )}
-        {node.status === "complete" && (
+        {node.status === "complete" && !isInput && (
           <button className="ghost-button" onClick={() => onReopen(node.id)} disabled={isBusy}>
             Undo
           </button>
@@ -104,15 +112,6 @@ function StepRow({ node, busyId, nodeErrors, onComplete, onRun, onReopen, onSubm
       </div>
     </div>
   );
-}
-
-function formatCapacity(outputJson) {
-  try {
-    const data = JSON.parse(outputJson);
-    return `Assumed capacity: ${data.total_frontend_days} frontend / ${data.total_backend_days} backend staff-days per release.`;
-  } catch {
-    return null;
-  }
 }
 
 function WorkflowNode({ node, ...actions }) {

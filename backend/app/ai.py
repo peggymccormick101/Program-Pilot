@@ -28,10 +28,9 @@ def get_client() -> anthropic.Anthropic:
 
 def _run_structured(system: str, user_content: str, schema: dict, max_tokens: int) -> dict:
     # Streamed rather than a single blocking call -- generate_roadmap_options
-    # asks for a large structured response (max_tokens=8192), and a plain
-    # non-streaming request that size risks tripping Render's own request
-    # timeout before Claude finishes, which looked like the step silently
-    # failing (no output file, step just reset to available).
+    # asks for a large structured response, and a plain non-streaming
+    # request that size risks tripping Render's own request timeout
+    # before Claude finishes.
     client = get_client()
     with client.messages.stream(
         model=MODEL,
@@ -44,7 +43,16 @@ def _run_structured(system: str, user_content: str, schema: dict, max_tokens: in
 
     text_blocks = [b.text for b in response.content if b.type == "text"]
     if not text_blocks:
-        raise RuntimeError("Claude did not return a response.")
+        # Adaptive thinking counts against max_tokens same as the visible
+        # output -- on a complex request it can spend the whole budget
+        # reasoning and hit the cap before writing any text at all, which
+        # looks exactly like this: stop_reason "max_tokens", no text block.
+        raise RuntimeError(
+            f"Claude did not return a usable response (stop_reason={response.stop_reason}, "
+            f"{response.usage.output_tokens} output tokens used). If stop_reason is "
+            "'max_tokens', it likely ran out of room mid-thought -- try again, and if "
+            "it keeps happening this call needs a higher max_tokens."
+        )
     return json.loads(text_blocks[-1])
 
 
@@ -166,5 +174,5 @@ def generate_roadmap_options(features: list[dict], capacity: dict) -> dict:
         ),
         user_content=f"Feature issues (JSON):\n{json.dumps(features, indent=2)}",
         schema=ROADMAP_OPTIONS_SCHEMA,
-        max_tokens=8192,
+        max_tokens=24000,
     )
