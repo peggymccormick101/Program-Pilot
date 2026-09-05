@@ -8,6 +8,7 @@ import {
   submitCapacity,
   updateProject,
 } from "./api.js";
+import heroImage from "./hero.png";
 
 const PHASE_CLASS = {
   1: "phase-1",
@@ -277,10 +278,16 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <div className="brand">
-          <span className="brand-program">Program Management</span> <span className="brand-pilot">AI Assistant</span>
+        <div className="hero-row">
+          <img className="hero-photo" src={heroImage} alt="" />
+          <div className="hero-text">
+            <div className="brand">
+              <span className="brand-program">Program Management</span>
+              <span className="brand-pilot">AI Assistant</span>
+            </div>
+            <p className="tagline">Plan Smarter | Align Teams | Execute with Confidence | Deliver Impact</p>
+          </div>
         </div>
-        <p className="tagline">Plan Smarter | Align Teams | Execute with Confidence | Deliver Impact</p>
       </header>
 
       <main className="app-main">
