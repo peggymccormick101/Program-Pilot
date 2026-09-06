@@ -41,7 +41,13 @@ FRONTEND_DIST = os.path.normpath(
 if os.path.isdir(FRONTEND_DIST):
     assets_dir = os.path.join(FRONTEND_DIST, "assets")
     if os.path.isdir(assets_dir):
-        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+        # Vite content-hashes these filenames, so a new build always gets a
+        # new URL -- safe to cache aggressively.
+        app.mount(
+            "/assets",
+            StaticFiles(directory=assets_dir),
+            name="assets",
+        )
 
     @app.get("/{full_path:path}")
     def serve_spa(full_path: str):
@@ -53,4 +59,10 @@ if os.path.isdir(FRONTEND_DIST):
             and os.path.isfile(candidate)
         ):
             return FileResponse(candidate)
-        return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
+        # index.html isn't hashed -- without this, browsers can cache a
+        # stale copy that references a JS bundle from a previous deploy
+        # (that's what happened right after the program-picker rollout).
+        return FileResponse(
+            os.path.join(FRONTEND_DIST, "index.html"),
+            headers={"Cache-Control": "no-cache, must-revalidate"},
+        )
