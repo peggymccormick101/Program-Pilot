@@ -47,10 +47,11 @@ PROGRAM_STATE_FIELDS = {
     "effort_estimate": JIRA_FEATURE_FIELDS["pdm_effort_estimate"],
 }
 
-# Marks a Task issue as one of ours (vs. a real program-management Task a
-# person created) so list_program_issues can find it for the program
-# picker.
-PROGRAM_STATE_LABEL = "program-pilot-state"
+# Marks a Task issue as a program (vs. any other Task in the project) so
+# list_program_issues can find it for the program picker. Any Task
+# issue with this label is selectable -- hand-labeled ones included, not
+# just ones the app created itself.
+PROGRAM_STATE_LABEL = "Program"
 
 # Which Jira project to create/list program Task issues in, before any
 # local Project row (which normally carries its own jira_project_key)
@@ -167,7 +168,7 @@ def attach_file(issue_key: str, filename: str, content: bytes, content_type: str
 
 
 def list_program_issues(project_key: str) -> list[dict]:
-    """Every program-pilot-state Task issue in this project (key + name),
+    """Every Program-labeled Task issue in this project (key + name),
     most recently updated first -- backs the "pick a program" screen."""
     base_url, email, api_token = _get_config()
 

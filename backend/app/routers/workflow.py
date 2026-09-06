@@ -126,7 +126,7 @@ def update_project(payload: schemas.ProjectUpdate, db: Session = Depends(get_db)
 
 @router.get("/jira/programs", response_model=list[schemas.ProgramSummary])
 def list_jira_programs(db: Session = Depends(get_db)):
-    """Every program-pilot-state Task issue in Jira, for the "pick a
+    """Every Program-labeled Task issue in Jira, for the "pick a
     program" screen. Not scoped to what's loaded locally -- this always
     reflects what actually exists in Jira."""
     return _handle_errors(jira_client.list_program_issues, jira_client.DEFAULT_PROJECT_KEY)
