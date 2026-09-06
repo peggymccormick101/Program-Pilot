@@ -157,22 +157,10 @@ def _insert_children(db, project, parent, phase_number, items):
             _insert_children(db, project, node, phase_number, children)
 
 
-def seed_if_empty(db):
-    if db.query(Project).first():
-        return
-
-    # Render's free-tier disk is ephemeral -- a restart wipes this local
-    # database. Before seeding a blank demo program, check whether a real
-    # program's state already exists in Jira (it's the durable store) and
-    # rehydrate from that instead.
-    from app.jira_state import bootstrap_project
-    if bootstrap_project(db):
-        return
-
-    project = Project(name="Demo Program", jira_project_key="PB")
-    db.add(project)
-    db.flush()
-
+def build_workflow_tree(db, project: Project) -> None:
+    """Builds the Phase 1 workflow tree plus Phases 2-5 placeholders for
+    a (already persisted, has an id) Project. Does not commit -- callers
+    do that once the rest of the project's setup is also ready."""
     phase_1 = WorkflowNode(
         project_id=project.id,
         parent_id=None,
@@ -208,5 +196,3 @@ def seed_if_empty(db):
                     automation_type=None,
                 )
             )
-
-    db.commit()

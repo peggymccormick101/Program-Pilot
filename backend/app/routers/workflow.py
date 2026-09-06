@@ -37,9 +37,13 @@ def _handle_errors(fn, *args, **kwargs):
 
 
 def _get_project(db: Session) -> models.Project:
-    project = db.query(models.Project).first()
+    project = (
+        db.query(models.Project)
+        .order_by(models.Project.selected_at.desc())
+        .first()
+    )
     if not project:
-        raise HTTPException(status_code=404, detail="No project has been set up yet.")
+        raise HTTPException(status_code=404, detail="No program has been selected yet.")
     return project
 
 
@@ -118,6 +122,26 @@ def update_project(payload: schemas.ProjectUpdate, db: Session = Depends(get_db)
     db.commit()
     db.refresh(project)
     return project
+
+
+@router.get("/jira/programs", response_model=list[schemas.ProgramSummary])
+def list_jira_programs(db: Session = Depends(get_db)):
+    """Every program-pilot-state Task issue in Jira, for the "pick a
+    program" screen. Not scoped to what's loaded locally -- this always
+    reflects what actually exists in Jira."""
+    return _handle_errors(jira_client.list_program_issues, jira_client.DEFAULT_PROJECT_KEY)
+
+
+@router.post("/programs/select", response_model=schemas.WorkflowOut)
+def select_program(payload: schemas.SelectProgramRequest, db: Session = Depends(get_db)):
+    _handle_errors(jira_state.load_program, db, payload.issue_key)
+    return get_workflow(db)
+
+
+@router.post("/programs", response_model=schemas.WorkflowOut)
+def new_program(payload: schemas.NewProgramRequest, db: Session = Depends(get_db)):
+    _handle_errors(jira_state.create_program, db, payload.name)
+    return get_workflow(db)
 
 
 @router.get("/workflow", response_model=schemas.WorkflowOut)

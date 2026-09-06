@@ -50,3 +50,16 @@ class RunNodeResult(BaseModel):
 class CapacityInput(BaseModel):
     total_frontend_days: float
     total_backend_days: float
+
+
+class ProgramSummary(BaseModel):
+    issue_key: str
+    name: Optional[str] = None
+
+
+class SelectProgramRequest(BaseModel):
+    issue_key: str
+
+
+class NewProgramRequest(BaseModel):
+    name: str

@@ -46,6 +46,21 @@ export function updateProject(payload) {
   return request("/project", { method: "PATCH", body: JSON.stringify(payload) });
 }
 
+export function listJiraPrograms() {
+  return request("/jira/programs");
+}
+
+export function selectProgram(issueKey) {
+  return request("/programs/select", {
+    method: "POST",
+    body: JSON.stringify({ issue_key: issueKey }),
+  });
+}
+
+export function createProgram(name) {
+  return request("/programs", { method: "POST", body: JSON.stringify({ name }) });
+}
+
 export function downloadUrl(fileId) {
   return `/api/files/${fileId}`;
 }

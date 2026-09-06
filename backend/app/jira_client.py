@@ -48,9 +48,14 @@ PROGRAM_STATE_FIELDS = {
 }
 
 # Marks a Task issue as one of ours (vs. a real program-management Task a
-# person created) so find_program_state_issue can find it again after an
-# ephemeral restart wipes the local database.
+# person created) so list_program_issues can find it for the program
+# picker.
 PROGRAM_STATE_LABEL = "program-pilot-state"
+
+# Which Jira project to create/list program Task issues in, before any
+# local Project row (which normally carries its own jira_project_key)
+# exists yet.
+DEFAULT_PROJECT_KEY = os.environ.get("JIRA_PROJECT_KEY", "PB")
 
 
 class JiraNotConfiguredError(Exception):
@@ -161,37 +166,49 @@ def attach_file(issue_key: str, filename: str, content: bytes, content_type: str
         )
 
 
-def find_program_state_issue(project_key: str) -> Optional[dict]:
-    """Look up the most recently updated program-pilot-state Task issue in
-    this project, if one exists -- used on boot to rehydrate a program
-    after the local (ephemeral) database has been wiped by a restart.
-    Returns {"issue_key", "name", "frontend_estimate", "backend_estimate"}
-    or None if no such issue exists yet."""
+def list_program_issues(project_key: str) -> list[dict]:
+    """Every program-pilot-state Task issue in this project (key + name),
+    most recently updated first -- backs the "pick a program" screen."""
     base_url, email, api_token = _get_config()
 
     jql = (
         f'project = "{project_key}" AND issuetype = Task '
         f'AND labels = "{PROGRAM_STATE_LABEL}" ORDER BY updated DESC'
     )
-    fields = ["summary"] + list(PROGRAM_STATE_FIELDS.values())
     response = requests.get(
         f"{base_url}/rest/api/3/search/jql",
         headers={**_auth_header(email, api_token), "Accept": "application/json"},
-        params={"jql": jql, "fields": ",".join(fields), "maxResults": 1},
+        params={"jql": jql, "fields": "summary", "maxResults": 50},
         timeout=15,
     )
     if not response.ok:
         raise JiraRequestError(
-            f"Jira program-state lookup failed (status {response.status_code}): {response.text[:300]}"
+            f"Jira program list failed (status {response.status_code}): {response.text[:300]}"
         )
-    issues = response.json().get("issues", [])
-    if not issues:
-        return None
+    return [
+        {"issue_key": issue["key"], "name": issue.get("fields", {}).get("summary")}
+        for issue in response.json().get("issues", [])
+    ]
 
-    issue = issues[0]
-    f = issue.get("fields", {})
+
+def get_issue(issue_key: str) -> dict:
+    """Fetch one program's name + capacity fields from Jira -- used when
+    the user selects a program from the picker to load its capacity."""
+    base_url, email, api_token = _get_config()
+    fields = ["summary"] + list(PROGRAM_STATE_FIELDS.values())
+    response = requests.get(
+        f"{base_url}/rest/api/3/issue/{issue_key}",
+        headers={**_auth_header(email, api_token), "Accept": "application/json"},
+        params={"fields": ",".join(fields)},
+        timeout=15,
+    )
+    if not response.ok:
+        raise JiraRequestError(
+            f"Jira issue lookup failed (status {response.status_code}): {response.text[:300]}"
+        )
+    f = response.json().get("fields", {})
     return {
-        "issue_key": issue["key"],
+        "issue_key": issue_key,
         "name": f.get("summary"),
         "frontend_estimate": f.get(PROGRAM_STATE_FIELDS["frontend_estimate"]),
         "backend_estimate": f.get(PROGRAM_STATE_FIELDS["backend_estimate"]),

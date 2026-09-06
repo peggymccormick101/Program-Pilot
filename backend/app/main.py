@@ -9,14 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.database import Base, SessionLocal, engine
+from app.database import Base, engine
 from app.routers import workflow
-from app.seed import seed_if_empty
 
 Base.metadata.create_all(bind=engine)
-
-with SessionLocal() as db:
-    seed_if_empty(db)
 
 app = FastAPI(title="Program Pilot API")
 

@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import {
   completeNode,
+  createProgram,
   downloadUrl,
   getWorkflow,
+  listJiraPrograms,
   reopenNode,
   runNode,
+  selectProgram,
   submitCapacity,
   updateProject,
 } from "./api.js";
@@ -160,7 +163,87 @@ function PhaseCard({ phase, active, ...actions }) {
   );
 }
 
-function ProjectSetup({ project, onSave, saving }) {
+function ProgramPicker({ onSelect, onCreate }) {
+  const [programs, setPrograms] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const [newName, setNewName] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    listJiraPrograms()
+      .then(setPrograms)
+      .catch((e) => setLoadError(e.message));
+  }, []);
+
+  async function pick(issueKey) {
+    setBusy(true);
+    setLoadError(null);
+    try {
+      await onSelect(issueKey);
+    } catch (e) {
+      setLoadError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitNew(e) {
+    e.preventDefault();
+    if (!newName.trim()) return;
+    setBusy(true);
+    setLoadError(null);
+    try {
+      await onCreate(newName.trim());
+    } catch (e) {
+      setLoadError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="program-picker">
+      <h2>Select a program</h2>
+      <p className="program-picker-subtitle">
+        Programs are stored as Task issues in Jira, so your work is never lost.
+      </p>
+
+      {loadError && <p className="load-error">{loadError}</p>}
+
+      {programs === null && !loadError && <p>Loading programs from Jira...</p>}
+
+      {programs && programs.length > 0 && (
+        <ul className="program-list">
+          {programs.map((p) => (
+            <li key={p.issue_key} className="program-list-item">
+              <span className="program-list-name">{p.name || p.issue_key}</span>
+              <span className="program-list-key">{p.issue_key}</span>
+              <button onClick={() => pick(p.issue_key)} disabled={busy}>
+                Select
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {programs && programs.length === 0 && (
+        <p className="program-picker-empty">No programs yet -- create the first one below.</p>
+      )}
+
+      <form className="program-picker-new" onSubmit={submitNew}>
+        <label>
+          New program name
+          <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} required />
+        </label>
+        <button type="submit" disabled={busy}>
+          {busy ? "Creating..." : "Create Program"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function ProjectSetup({ project, onSave, saving, onSwitchProgram }) {
   const [name, setName] = useState(project.name || "");
   const [editing, setEditing] = useState(false);
 
@@ -174,9 +257,14 @@ function ProjectSetup({ project, onSave, saving }) {
     return (
       <div className="project-setup project-setup-summary">
         <span className="project-name">{project.name}</span>
-        <button className="ghost-button" onClick={() => setEditing(true)}>
-          Edit
-        </button>
+        <div className="project-setup-actions">
+          <button className="ghost-button" onClick={() => setEditing(true)}>
+            Edit
+          </button>
+          <button className="ghost-button" onClick={onSwitchProgram}>
+            Switch Program
+          </button>
+        </div>
       </div>
     );
   }
@@ -197,6 +285,7 @@ function ProjectSetup({ project, onSave, saving }) {
 export default function App() {
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  const [noProgramSelected, setNoProgramSelected] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [nodeErrors, setNodeErrors] = useState({});
   const [savingProject, setSavingProject] = useState(false);
@@ -206,9 +295,29 @@ export default function App() {
       const result = await getWorkflow();
       setData(result);
       setLoadError(null);
+      setNoProgramSelected(false);
     } catch (e) {
-      setLoadError(e.message);
+      if (e.status === 404) {
+        setData(null);
+        setNoProgramSelected(true);
+      } else {
+        setLoadError(e.message);
+      }
     }
+  }
+
+  async function handleSelectProgram(issueKey) {
+    const result = await selectProgram(issueKey);
+    setData(result);
+    setLoadError(null);
+    setNoProgramSelected(false);
+  }
+
+  async function handleCreateProgram(name) {
+    const result = await createProgram(name);
+    setData(result);
+    setLoadError(null);
+    setNoProgramSelected(false);
   }
 
   useEffect(() => {
@@ -274,6 +383,11 @@ export default function App() {
     }
   }
 
+  function handleSwitchProgram() {
+    setData(null);
+    setNoProgramSelected(true);
+  }
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -292,9 +406,18 @@ export default function App() {
       <main className="app-main">
         {loadError && <p className="load-error">Couldn't load the workflow: {loadError}</p>}
 
+        {noProgramSelected && (
+          <ProgramPicker onSelect={handleSelectProgram} onCreate={handleCreateProgram} />
+        )}
+
         {data && (
           <>
-            <ProjectSetup project={data.project} onSave={handleSaveProject} saving={savingProject} />
+            <ProjectSetup
+              project={data.project}
+              onSave={handleSaveProject}
+              saving={savingProject}
+              onSwitchProgram={handleSwitchProgram}
+            />
             <div className="phase-list">
               {data.phases.map((phase) => (
                 <PhaseCard

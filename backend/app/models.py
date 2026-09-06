@@ -18,6 +18,10 @@ class Project(Base):
     # the program survives an instance restart.
     jira_issue_key = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    # Multiple programs can exist locally in the same run (one per
+    # program loaded/created this session) -- the most recently selected
+    # one is "the" active project for the rest of the app.
+    selected_at = Column(DateTime, nullable=True)
 
     nodes = relationship(
         "WorkflowNode", back_populates="project", cascade="all, delete-orphan"
