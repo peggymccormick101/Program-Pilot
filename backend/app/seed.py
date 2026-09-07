@@ -34,11 +34,7 @@ PHASE_1_TASKS = [
             {
                 "title": "Create Single Jira Feature Issue",
                 "automation_type": "manual",
-                "description": (
-                    "Create a new Feature issue type to represent each "
-                    "feature. Ensure you add the release number, "
-                    "description and feature ID."
-                ),
+                "description": "Create Feature issues in Jira and link them to the program.",
             },
             {
                 "title": "Provide Feature Estimates",
@@ -46,7 +42,7 @@ PHASE_1_TASKS = [
                 "description": (
                     "Enter your high level feature estimates in the Story "
                     "Points field assuming 1 point = 1 eight hour day of "
-                    "work"
+                    "work for each feature."
                 ),
             },
             {

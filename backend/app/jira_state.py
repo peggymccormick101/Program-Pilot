@@ -57,16 +57,21 @@ def _apply_capacity(db, project: models.Project, frontend, backend) -> None:
 
 
 def load_program(db, issue_key: str) -> models.Project:
-    """Selects a program from the picker. If it's already loaded locally
-    this run, just marks it current; otherwise fetches its name and
-    capacity from Jira and builds a fresh local workflow tree for it."""
+    """Selects a program from the picker. Jira is the durable store, and
+    can be edited directly there (not just through this app), so name +
+    capacity are refreshed from Jira on every select -- even for a
+    program already loaded locally this run. Only the workflow tree
+    itself (Phase 1 progress) is preserved locally rather than rebuilt,
+    since that's not tracked in Jira."""
+    issue = jira_client.get_issue(issue_key)
     existing = db.query(models.Project).filter(models.Project.jira_issue_key == issue_key).first()
     if existing:
+        existing.name = issue["name"] or existing.name
         existing.selected_at = datetime.utcnow()
+        _apply_capacity(db, existing, issue.get("frontend_estimate"), issue.get("backend_estimate"))
         db.commit()
         return existing
 
-    issue = jira_client.get_issue(issue_key)
     project = models.Project(
         name=issue["name"] or issue_key,
         jira_project_key=jira_client.DEFAULT_PROJECT_KEY,
