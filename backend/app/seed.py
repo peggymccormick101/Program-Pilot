@@ -32,39 +32,44 @@ PHASE_1_TASKS = [
         "title": "Define Initial Roadmap",
         "children": [
             {
-                "title": "Create Single Jira Feature Issue",
-                "automation_type": "manual",
-                "description": "Create Feature issues in Jira and link them to the program.",
-            },
-            {
-                "title": "Provide Feature Estimates",
-                "automation_type": "manual",
-                "description": (
-                    "Enter your high level feature estimates in the Story "
-                    "Points field assuming 1 point = 1 eight hour day of "
-                    "work for each feature."
-                ),
-            },
-            {
-                "title": "Calculate RICE scores",
-                "automation_type": "manual",
-                "description": "Calculate RICE scores and enter into respective Jira fields",
-            },
-            {
-                "title": "Define Inter-Feature Dependencies and Assumptions",
-                "automation_type": "manual",
-                "description": (
-                    "Document inter-feature dependencies and assumptions "
-                    "in the Jira description."
-                ),
-            },
-            {
-                "title": "Define High Level Estimates",
-                "automation_type": "manual",
-                "description": (
-                    "Add high level estimates in Jira (consult architects "
-                    "and development leads, as needed)"
-                ),
+                "title": "For Each Feature In Roadmap",
+                "children": [
+                    {
+                        "title": "Create Features in Jira",
+                        "automation_type": "manual",
+                        "description": "Create Feature issues in Jira and link them to the program.",
+                    },
+                    {
+                        "title": "Provide Feature Estimates",
+                        "automation_type": "manual",
+                        "description": (
+                            "Enter your high level feature estimates in the Story "
+                            "Points field assuming 1 point = 1 eight hour day of "
+                            "work for each feature."
+                        ),
+                    },
+                    {
+                        "title": "Calculate RICE scores",
+                        "automation_type": "manual",
+                        "description": "Calculate RICE scores and enter into respective Jira fields",
+                    },
+                    {
+                        "title": "Define Inter-Feature Dependencies and Assumptions",
+                        "automation_type": "manual",
+                        "description": (
+                            "Document inter-feature dependencies and assumptions "
+                            "in the Jira description."
+                        ),
+                    },
+                    {
+                        "title": "Define High Level Estimates",
+                        "automation_type": "manual",
+                        "description": (
+                            "Add high level estimates in Jira (consult architects "
+                            "and development leads, as needed)"
+                        ),
+                    },
+                ],
             },
             {
                 "title": "Provide Per Release Development Capacity",

@@ -218,7 +218,9 @@ def get_issue(issue_key: str) -> dict:
 
 def search_features(project_key: str, extra_jql: Optional[str] = None) -> list[dict]:
     """Return every Feature-type issue in the given project, with the
-    fields the roadmap-planning prompts need.
+    fields the roadmap-planning prompts need. `extra_jql` narrows this
+    further, e.g. to Features linked to a specific program issue:
+    'issue in linkedIssues("PB-48", "implements")'.
 
     Uses /rest/api/3/search/jql -- Atlassian removed the old
     /rest/api/3/search endpoint (CHANGE-2046) in favor of this one, which

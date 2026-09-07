@@ -279,7 +279,14 @@ def _run_roadmap_options(db: Session, project: models.Project, node: models.Work
         .first()
     )
     capacity = json.loads(capacity_node.output) if capacity_node and capacity_node.output else {}
-    features = jira_client.search_features(project.jira_project_key or "")
+
+    # Only Features actually scoped to this program -- linked to its Jira
+    # issue via an "Implements" relationship -- go into the roadmap, not
+    # every Feature in the whole Jira project.
+    extra_jql = None
+    if project.jira_issue_key:
+        extra_jql = f'issue in linkedIssues("{project.jira_issue_key}", "implements")'
+    features = jira_client.search_features(project.jira_project_key or "", extra_jql=extra_jql)
     result = ai.generate_roadmap_options(features, capacity)
 
     docx_bytes = roadmap_docx.build_roadmap_docx(result, program_name=project.name)
