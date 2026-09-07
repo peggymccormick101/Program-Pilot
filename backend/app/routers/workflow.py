@@ -385,3 +385,11 @@ def list_jira_fields():
     JIRA_FEATURE_FIELDS in jira_client.py, instead of hunting through
     Jira admin screens by hand."""
     return _handle_errors(jira_client.list_fields)
+
+
+@router.get("/jira/issue-links/{issue_key}")
+def list_issue_links(issue_key: str):
+    """Debug helper: the raw issuelinks data for an issue, so a link
+    type's actual name/inward/outward text can be confirmed directly
+    instead of guessing at what get_linked_issue_keys should match."""
+    return _handle_errors(jira_client.get_issue_links_raw, issue_key)

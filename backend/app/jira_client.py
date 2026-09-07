@@ -126,14 +126,13 @@ def list_fields() -> list[dict]:
     )
 
 
-def get_linked_issue_keys(issue_key: str, link_type_name: str) -> list[str]:
-    """Keys of every issue linked to `issue_key` via a link of type
-    `link_type_name` (matched case-insensitively against the link
-    type's name, not its inward/outward description text -- e.g. an
-    "Implements" link type shows up as {"name": "Implements", ...}
-    regardless of which side of the relationship this issue is on).
-    Used instead of the JQL linkedIssues() function, whose text-match
-    rules against inward/outward descriptions are less predictable."""
+def get_issue_links_raw(issue_key: str) -> list[dict]:
+    """The raw issuelinks array for an issue, straight from Jira -- a
+    debug helper (see /api/jira/issue-links/{key}) for seeing exactly
+    what a link type's name/inward/outward text actually is, since
+    those three are configured independently and admins often set them
+    to different phrasings (e.g. name "Implementation" vs. outward
+    description "implements")."""
     base_url, email, api_token = _get_config()
     response = requests.get(
         f"{base_url}/rest/api/3/issue/{issue_key}",
@@ -145,10 +144,30 @@ def get_linked_issue_keys(issue_key: str, link_type_name: str) -> list[str]:
         raise JiraRequestError(
             f"Jira issue link lookup failed (status {response.status_code}): {response.text[:300]}"
         )
-    links = response.json().get("fields", {}).get("issuelinks", [])
+    return response.json().get("fields", {}).get("issuelinks", [])
+
+
+def get_linked_issue_keys(issue_key: str, link_type_name: str) -> list[str]:
+    """Keys of every issue linked to `issue_key` via a link matching
+    `link_type_name`, checked case-insensitively against the link
+    type's name AND its inward/outward description text -- a link
+    type's name, inward description, and outward description are
+    configured independently in Jira (e.g. name "Implementation" but
+    outward text "implements"), so matching only the name can miss a
+    link a person would recognize by its description. Used instead of
+    the JQL linkedIssues() function, whose text-match rules are even
+    less predictable."""
+    links = get_issue_links_raw(issue_key)
+    wanted = link_type_name.lower()
     keys = []
     for link in links:
-        if link.get("type", {}).get("name", "").lower() != link_type_name.lower():
+        link_type = link.get("type", {})
+        candidates = {
+            (link_type.get("name") or "").lower(),
+            (link_type.get("inward") or "").lower(),
+            (link_type.get("outward") or "").lower(),
+        }
+        if wanted not in candidates:
             continue
         other = link.get("inwardIssue") or link.get("outwardIssue")
         if other:
