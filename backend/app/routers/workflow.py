@@ -293,11 +293,20 @@ def _run_roadmap_options(db: Session, project: models.Project, node: models.Work
 
     # Only Features actually scoped to this program -- linked to its Jira
     # issue via an "Implements" relationship -- go into the roadmap, not
-    # every Feature in the whole Jira project.
-    extra_jql = None
-    if project.jira_issue_key:
-        extra_jql = f'issue in linkedIssues("{project.jira_issue_key}", "implements")'
-    features = jira_client.search_features(project.jira_project_key or "", extra_jql=extra_jql)
+    # every Feature in the whole Jira project. Reads the program issue's
+    # actual link data rather than JQL's linkedIssues() function, whose
+    # inward/outward description text-matching is less predictable than
+    # matching on the link type's name directly.
+    feature_keys = (
+        jira_client.get_linked_issue_keys(project.jira_issue_key, "Implements")
+        if project.jira_issue_key
+        else []
+    )
+    if feature_keys:
+        extra_jql = "key in (" + ",".join(feature_keys) + ")"
+        features = jira_client.search_features(project.jira_project_key or "", extra_jql=extra_jql)
+    else:
+        features = []
     result = ai.generate_roadmap_options(features, capacity)
 
     docx_bytes = roadmap_docx.build_roadmap_docx(result, program_name=project.name)

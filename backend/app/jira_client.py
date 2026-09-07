@@ -126,6 +126,36 @@ def list_fields() -> list[dict]:
     )
 
 
+def get_linked_issue_keys(issue_key: str, link_type_name: str) -> list[str]:
+    """Keys of every issue linked to `issue_key` via a link of type
+    `link_type_name` (matched case-insensitively against the link
+    type's name, not its inward/outward description text -- e.g. an
+    "Implements" link type shows up as {"name": "Implements", ...}
+    regardless of which side of the relationship this issue is on).
+    Used instead of the JQL linkedIssues() function, whose text-match
+    rules against inward/outward descriptions are less predictable."""
+    base_url, email, api_token = _get_config()
+    response = requests.get(
+        f"{base_url}/rest/api/3/issue/{issue_key}",
+        headers={**_auth_header(email, api_token), "Accept": "application/json"},
+        params={"fields": "issuelinks"},
+        timeout=15,
+    )
+    if not response.ok:
+        raise JiraRequestError(
+            f"Jira issue link lookup failed (status {response.status_code}): {response.text[:300]}"
+        )
+    links = response.json().get("fields", {}).get("issuelinks", [])
+    keys = []
+    for link in links:
+        if link.get("type", {}).get("name", "").lower() != link_type_name.lower():
+            continue
+        other = link.get("inwardIssue") or link.get("outwardIssue")
+        if other:
+            keys.append(other["key"])
+    return keys
+
+
 def create_issue(project_key: str, issue_type: str, fields: dict) -> str:
     """Create an issue and return its key (e.g. "PB-42"). `fields` is
     merged with project/issuetype into the standard
