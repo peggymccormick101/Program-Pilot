@@ -199,6 +199,17 @@ def complete_node(node_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="This step isn't a manual step.")
     _check_available(db, node)
     node.completed_at = datetime.utcnow()
+
+    # A handful of these steps are tracked in Jira's "Program State"
+    # field (see jira_state.PROGRAM_STATE_SEQUENCE) so progress survives
+    # an ephemeral disk wipe; steps outside that mapping (e.g. Define
+    # Bus Strategy) no-op here and stay local-only.
+    project = db.query(models.Project).filter(models.Project.id == node.project_id).first()
+    try:
+        _handle_errors(jira_state.sync_step_state_to_jira, project, node.title)
+    except HTTPException:
+        db.rollback()
+        raise
     db.commit()
     db.refresh(node)
     phase_1 = db.query(models.WorkflowNode).filter(
@@ -255,6 +266,7 @@ def submit_capacity(node_id: int, payload: schemas.CapacityInput, db: Session = 
                 "total_backend_days": payload.total_backend_days,
             },
         )
+        _handle_errors(jira_state.sync_step_state_to_jira, project, node.title)
     except HTTPException:
         db.rollback()
         raise
@@ -330,6 +342,11 @@ def run_node(node_id: int, db: Session = Depends(get_db)):
     _handle_errors(runner, db, project, node)
 
     node.completed_at = datetime.utcnow()
+    try:
+        _handle_errors(jira_state.sync_step_state_to_jira, project, node.title)
+    except HTTPException:
+        db.rollback()
+        raise
     db.commit()
     db.refresh(node)
     phase_1 = db.query(models.WorkflowNode).filter(

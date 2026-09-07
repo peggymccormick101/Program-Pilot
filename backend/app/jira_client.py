@@ -58,6 +58,13 @@ PROGRAM_STATE_LABEL = "Program"
 # exists yet.
 DEFAULT_PROJECT_KEY = os.environ.get("JIRA_PROJECT_KEY", "PB")
 
+# "Program State" -- a single-select dropdown field on the program's
+# Task issue tracking how far through Phase 1 the program has gotten.
+# A select field's value comes back as {"value": "...", "id": "...",
+# "self": "..."} and must be written the same way, e.g.
+# {"value": "FeaturesInJira"} -- not a plain string.
+PROGRAM_STATE_STATUS_FIELD = "customfield_10139"
+
 
 class JiraNotConfiguredError(Exception):
     """Jira credentials aren't set yet."""
@@ -86,10 +93,11 @@ def _auth_header(email: str, api_token: str) -> dict:
 
 
 def list_fields() -> list[dict]:
-    """Every field on this Jira instance (name + id). Used by the
+    """Every field on this Jira instance (name + id + type). Used by the
     /api/jira/fields debug route to find the real customfield_XXXXX ids
-    for JIRA_FEATURE_FIELDS above -- no need to hunt through Jira admin
-    screens by hand."""
+    (and whether they're a select-list, text field, etc.) for
+    JIRA_FEATURE_FIELDS/PROGRAM_STATE_FIELDS above -- no need to hunt
+    through Jira admin screens by hand."""
     base_url, email, api_token = _get_config()
     response = requests.get(
         f"{base_url}/rest/api/3/field",
@@ -104,7 +112,16 @@ def list_fields() -> list[dict]:
     # Custom fields first (that's what we actually need to map), then
     # sorted by name so it's easy to scan.
     return sorted(
-        [{"id": f["id"], "name": f["name"], "custom": f.get("custom", False)} for f in fields],
+        [
+            {
+                "id": f["id"],
+                "name": f["name"],
+                "custom": f.get("custom", False),
+                "type": (f.get("schema") or {}).get("type"),
+                "custom_type": (f.get("schema") or {}).get("custom"),
+            }
+            for f in fields
+        ],
         key=lambda f: (not f["custom"], f["name"].lower()),
     )
 
@@ -193,10 +210,11 @@ def list_program_issues(project_key: str) -> list[dict]:
 
 
 def get_issue(issue_key: str) -> dict:
-    """Fetch one program's name + capacity fields from Jira -- used when
-    the user selects a program from the picker to load its capacity."""
+    """Fetch one program's name, capacity fields, and workflow state from
+    Jira -- used when the user selects a program from the picker to
+    load its progress."""
     base_url, email, api_token = _get_config()
-    fields = ["summary"] + list(PROGRAM_STATE_FIELDS.values())
+    fields = ["summary", PROGRAM_STATE_STATUS_FIELD] + list(PROGRAM_STATE_FIELDS.values())
     response = requests.get(
         f"{base_url}/rest/api/3/issue/{issue_key}",
         headers={**_auth_header(email, api_token), "Accept": "application/json"},
@@ -208,9 +226,11 @@ def get_issue(issue_key: str) -> dict:
             f"Jira issue lookup failed (status {response.status_code}): {response.text[:300]}"
         )
     f = response.json().get("fields", {})
+    state_field = f.get(PROGRAM_STATE_STATUS_FIELD)
     return {
         "issue_key": issue_key,
         "name": f.get("summary"),
+        "state": (state_field or {}).get("value"),
         "frontend_estimate": f.get(PROGRAM_STATE_FIELDS["frontend_estimate"]),
         "backend_estimate": f.get(PROGRAM_STATE_FIELDS["backend_estimate"]),
     }

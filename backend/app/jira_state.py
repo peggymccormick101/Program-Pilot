@@ -10,6 +10,26 @@ from datetime import datetime
 from app import jira_client, models
 from app.seed import build_workflow_tree
 
+# Tracks how far a program has progressed through the per-feature /
+# roadmap steps in Define Initial Roadmap, via the "Program State"
+# select field on the program's Jira issue -- this is the durable
+# record of task completion, so it survives an ephemeral disk wipe the
+# same way name and capacity do. Order matters: index N means every
+# step up to and including index N is complete. The two earlier Phase 1
+# steps (Define Bus Strategy, Define Stakeholders) aren't part of this
+# mapping and are not restored on reload.
+PROGRAM_STATE_SEQUENCE = [
+    ("Initiated", None),
+    ("FeaturesInJira", "Create Feature in Jira"),
+    ("EstimatesProvided", "Provide Feature Estimates"),
+    ("RICEcalculated", "Calculate RICE Score"),
+    ("DepsDefined", "Define Inter-Feature Dependencies and Assumptions"),
+    ("DevCapProvided", "Provide Per Release Development Capacity"),
+    ("RoadmapOptionsProvided", "Generate Draft Roadmap Options"),
+    ("RoadmapOptionSelected", "Review, Refine and Select Roadmap Options"),
+]
+_STATE_NAME_BY_STEP_TITLE = {title: name for name, title in PROGRAM_STATE_SEQUENCE if title}
+
 
 def sync_program_to_jira(db, project: models.Project, capacity: dict | None = None) -> None:
     """Create the program's Jira Task issue if it doesn't have one yet,
@@ -35,6 +55,38 @@ def sync_program_to_jira(db, project: models.Project, capacity: dict | None = No
     issue_key = jira_client.create_issue(project_key, "Task", create_fields)
     project.jira_issue_key = issue_key
     db.commit()
+
+
+def sync_step_state_to_jira(project: models.Project, step_title: str) -> None:
+    """Called whenever a tracked step completes -- advances the
+    program's "Program State" field in Jira to match. No-ops for steps
+    outside PROGRAM_STATE_SEQUENCE (e.g. Define Bus Strategy)."""
+    state_name = _STATE_NAME_BY_STEP_TITLE.get(step_title)
+    if not state_name or not project.jira_issue_key:
+        return
+    jira_client.update_issue(
+        project.jira_issue_key,
+        {jira_client.PROGRAM_STATE_STATUS_FIELD: {"value": state_name}},
+    )
+
+
+def _apply_program_state(db, project: models.Project, state_value: str | None) -> None:
+    """Marks every tracked step up to and including `state_value` as
+    complete locally, catching the local workflow tree up to whatever
+    Jira says has actually been done."""
+    state_names = [name for name, _ in PROGRAM_STATE_SEQUENCE]
+    if not state_value or state_value not in state_names:
+        return
+    target_index = state_names.index(state_value)
+    now = datetime.utcnow()
+    for _, title in PROGRAM_STATE_SEQUENCE[1:target_index + 1]:
+        node = (
+            db.query(models.WorkflowNode)
+            .filter(models.WorkflowNode.project_id == project.id, models.WorkflowNode.title == title)
+            .first()
+        )
+        if node and not node.completed_at:
+            node.completed_at = now
 
 
 def _apply_capacity(db, project: models.Project, frontend, backend) -> None:
@@ -69,6 +121,7 @@ def load_program(db, issue_key: str) -> models.Project:
         existing.name = issue["name"] or existing.name
         existing.selected_at = datetime.utcnow()
         _apply_capacity(db, existing, issue.get("frontend_estimate"), issue.get("backend_estimate"))
+        _apply_program_state(db, existing, issue.get("state"))
         db.commit()
         return existing
 
@@ -82,6 +135,7 @@ def load_program(db, issue_key: str) -> models.Project:
     db.flush()
     build_workflow_tree(db, project)
     _apply_capacity(db, project, issue.get("frontend_estimate"), issue.get("backend_estimate"))
+    _apply_program_state(db, project, issue.get("state"))
     db.commit()
     return project
 
@@ -91,7 +145,13 @@ def create_program(db, name: str) -> models.Project:
     local workflow tree for it."""
     project_key = jira_client.DEFAULT_PROJECT_KEY
     issue_key = jira_client.create_issue(
-        project_key, "Task", {"summary": name, "labels": [jira_client.PROGRAM_STATE_LABEL]}
+        project_key,
+        "Task",
+        {
+            "summary": name,
+            "labels": [jira_client.PROGRAM_STATE_LABEL],
+            jira_client.PROGRAM_STATE_STATUS_FIELD: {"value": "Initiated"},
+        },
     )
     project = models.Project(
         name=name,

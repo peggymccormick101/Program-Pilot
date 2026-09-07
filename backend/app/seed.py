@@ -35,23 +35,31 @@ PHASE_1_TASKS = [
                 "title": "For Each Feature In Roadmap",
                 "children": [
                     {
-                        "title": "Create Features in Jira",
+                        "title": "Create Feature in Jira",
                         "automation_type": "manual",
-                        "description": "Create Feature issues in Jira and link them to the program.",
+                        "description": (
+                            'Create feature issue in Jira and link it to the program '
+                            'task using "implements" link relationship from the '
+                            "feature to the program."
+                        ),
                     },
                     {
                         "title": "Provide Feature Estimates",
                         "automation_type": "manual",
                         "description": (
-                            "Enter your high level feature estimates in the Story "
-                            "Points field assuming 1 point = 1 eight hour day of "
-                            "work for each feature."
+                            "Enter your high level front and backend estimates in "
+                            "the associated program management estimate fields for "
+                            "the feature."
                         ),
                     },
                     {
-                        "title": "Calculate RICE scores",
+                        "title": "Calculate RICE Score",
                         "automation_type": "manual",
-                        "description": "Calculate RICE scores and enter into respective Jira fields",
+                        "description": (
+                            "Calculate RICE score for the feature by filling in the "
+                            "Reach, Impact, Confidence fields on top of the "
+                            "estimates already provided."
+                        ),
                     },
                     {
                         "title": "Define Inter-Feature Dependencies and Assumptions",
@@ -59,14 +67,6 @@ PHASE_1_TASKS = [
                         "description": (
                             "Document inter-feature dependencies and assumptions "
                             "in the Jira description."
-                        ),
-                    },
-                    {
-                        "title": "Define High Level Estimates",
-                        "automation_type": "manual",
-                        "description": (
-                            "Add high level estimates in Jira (consult architects "
-                            "and development leads, as needed)"
                         ),
                     },
                 ],
