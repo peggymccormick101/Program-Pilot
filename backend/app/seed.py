@@ -65,8 +65,8 @@ PHASE_1_TASKS = [
                         "title": "Define Inter-Feature Dependencies and Assumptions",
                         "automation_type": "manual",
                         "description": (
-                            "Document inter-feature dependencies and assumptions "
-                            "in the Jira description."
+                            "Document inter-feature dependencies by entering the "
+                            "FID(s) in the Feature Dependencies field."
                         ),
                     },
                 ],
