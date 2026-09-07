@@ -200,10 +200,9 @@ def complete_node(node_id: int, db: Session = Depends(get_db)):
     _check_available(db, node)
     node.completed_at = datetime.utcnow()
 
-    # A handful of these steps are tracked in Jira's "Program State"
+    # Every Phase 1 manual step is tracked in Jira's "Program State"
     # field (see jira_state.PROGRAM_STATE_SEQUENCE) so progress survives
-    # an ephemeral disk wipe; steps outside that mapping (e.g. Define
-    # Bus Strategy) no-op here and stay local-only.
+    # an ephemeral disk wipe.
     project = db.query(models.Project).filter(models.Project.id == node.project_id).first()
     try:
         _handle_errors(jira_state.sync_step_state_to_jira, project, node.title)

@@ -21,7 +21,7 @@ Clearly state that the roadmap reflects Product intent based on preliminary esti
 # ("manual" | "automated") plus ai_harness/ai_prompt when automated.
 PHASE_1_TASKS = [
     {
-        "title": "Define Bus Strategy",
+        "title": "Define Business Strategy",
         "automation_type": "manual",
     },
     {

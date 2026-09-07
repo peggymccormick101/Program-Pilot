@@ -10,16 +10,15 @@ from datetime import datetime
 from app import jira_client, models
 from app.seed import build_workflow_tree
 
-# Tracks how far a program has progressed through the per-feature /
-# roadmap steps in Define Initial Roadmap, via the "Program State"
-# select field on the program's Jira issue -- this is the durable
-# record of task completion, so it survives an ephemeral disk wipe the
-# same way name and capacity do. Order matters: index N means every
-# step up to and including index N is complete. The two earlier Phase 1
-# steps (Define Bus Strategy, Define Stakeholders) aren't part of this
-# mapping and are not restored on reload.
+# Tracks how far a program has progressed through every Phase 1 step,
+# via the "Program State" select field on the program's Jira issue --
+# this is the durable record of task completion, so it survives an
+# ephemeral disk wipe the same way name and capacity do. Order matters:
+# index N means every step up to and including index N is complete.
 PROGRAM_STATE_SEQUENCE = [
     ("Initiated", None),
+    ("BusStrategyDefined", "Define Business Strategy"),
+    ("StakeholdersDefined", "Define Stakeholders"),
     ("FeaturesInJira", "Create Feature in Jira"),
     ("EstimatesProvided", "Provide Feature Estimates"),
     ("RICEcalculated", "Calculate RICE Score"),
@@ -59,8 +58,8 @@ def sync_program_to_jira(db, project: models.Project, capacity: dict | None = No
 
 def sync_step_state_to_jira(project: models.Project, step_title: str) -> None:
     """Called whenever a tracked step completes -- advances the
-    program's "Program State" field in Jira to match. No-ops for steps
-    outside PROGRAM_STATE_SEQUENCE (e.g. Define Bus Strategy)."""
+    program's "Program State" field in Jira to match. No-ops for any
+    step outside PROGRAM_STATE_SEQUENCE."""
     state_name = _STATE_NAME_BY_STEP_TITLE.get(step_title)
     if not state_name or not project.jira_issue_key:
         return
