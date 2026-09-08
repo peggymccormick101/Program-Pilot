@@ -5,9 +5,11 @@ import {
   downloadUrl,
   getWorkflow,
   listJiraPrograms,
+  listReleases,
   reopenNode,
   runNode,
   selectProgram,
+  selectRelease,
   submitCapacity,
   updateProject,
 } from "./api.js";
@@ -160,6 +162,83 @@ function PhaseCard({ phase, active, ...actions }) {
         </ul>
       )}
     </section>
+  );
+}
+
+function ReleaseGate({ selectedRelease, onSelect }) {
+  const [editing, setEditing] = useState(!selectedRelease);
+  const [releases, setReleases] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const [choice, setChoice] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!editing) return;
+    setReleases(null);
+    setLoadError(null);
+    listReleases()
+      .then((list) => {
+        setReleases(list);
+        if (list.length > 0) setChoice(list[0]);
+      })
+      .catch((e) => setLoadError(e.message));
+  }, [editing]);
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!choice) return;
+    setBusy(true);
+    setLoadError(null);
+    try {
+      await onSelect(choice);
+      setEditing(false);
+    } catch (e) {
+      setLoadError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className="release-gate release-gate-summary">
+        <span className="release-gate-label">Release</span>
+        <span className="release-gate-value">{selectedRelease}</span>
+        <button className="ghost-button" onClick={() => setEditing(true)}>
+          Change
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="release-gate release-gate-picker">
+      <p className="release-gate-intro">
+        Phases 2-5 apply to a single release. Select one to continue (pulled from the
+        Release field on this program's linked Features).
+      </p>
+      {loadError && <p className="load-error">{loadError}</p>}
+      {releases === null && !loadError && <p>Loading releases from Jira...</p>}
+      {releases && releases.length === 0 && (
+        <p className="program-picker-empty">
+          No releases found yet -- set the Release field on this program's Features in Jira.
+        </p>
+      )}
+      {releases && releases.length > 0 && (
+        <form className="release-gate-form" onSubmit={submit}>
+          <select value={choice} onChange={(e) => setChoice(e.target.value)}>
+            {releases.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+          <button type="submit" disabled={busy}>
+            {busy ? "Selecting..." : "Select Release"}
+          </button>
+        </form>
+      )}
+    </div>
   );
 }
 
@@ -388,6 +467,11 @@ export default function App() {
     setNoProgramSelected(true);
   }
 
+  async function handleSelectRelease(release) {
+    const result = await selectRelease(release);
+    setData(result);
+  }
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -419,11 +503,11 @@ export default function App() {
               onSwitchProgram={handleSwitchProgram}
             />
             <div className="phase-list">
-              {data.phases.map((phase) => (
+              {data.phases[0] && (
                 <PhaseCard
-                  key={phase.id}
-                  phase={phase}
-                  active={phase.phase_number === 1}
+                  key={data.phases[0].id}
+                  phase={data.phases[0]}
+                  active
                   busyId={busyId}
                   nodeErrors={nodeErrors}
                   onComplete={handleComplete}
@@ -431,7 +515,30 @@ export default function App() {
                   onRun={handleRun}
                   onSubmitCapacity={handleSubmitCapacity}
                 />
-              ))}
+              )}
+
+              {data.phases.length > 1 && (
+                <div className="release-phases">
+                  <ReleaseGate
+                    selectedRelease={data.project.selected_release}
+                    onSelect={handleSelectRelease}
+                  />
+                  {data.project.selected_release &&
+                    data.phases.slice(1).map((phase) => (
+                      <PhaseCard
+                        key={phase.id}
+                        phase={phase}
+                        active={false}
+                        busyId={busyId}
+                        nodeErrors={nodeErrors}
+                        onComplete={handleComplete}
+                        onReopen={handleReopen}
+                        onRun={handleRun}
+                        onSubmitCapacity={handleSubmitCapacity}
+                      />
+                    ))}
+                </div>
+              )}
             </div>
           </>
         )}

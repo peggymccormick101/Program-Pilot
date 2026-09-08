@@ -305,6 +305,67 @@ h2, h3 {
   gap: 20px;
 }
 
+.release-phases {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.release-gate {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.release-gate-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.release-gate-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.release-gate-value {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.release-gate-picker {
+  padding: 20px 22px;
+}
+
+.release-gate-intro {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+.release-gate-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.release-gate-form select {
+  font: inherit;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--paper);
+  color: var(--text-h);
+  min-width: 220px;
+}
+
 .phase-card {
   background: var(--card-bg);
   border: 1px solid var(--border);

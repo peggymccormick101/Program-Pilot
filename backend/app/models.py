@@ -22,6 +22,11 @@ class Project(Base):
     # program loaded/created this session) -- the most recently selected
     # one is "the" active project for the rest of the app.
     selected_at = Column(DateTime, nullable=True)
+    # Phases 2-5 apply to a single release (unlike Phase 1, which covers
+    # the whole multi-year roadmap) -- this is that release's value from
+    # the Release field on the program's linked Features. Local-only for
+    # now, not yet persisted to Jira the way name/capacity/state are.
+    selected_release = Column(String, nullable=True)
 
     nodes = relationship(
         "WorkflowNode", back_populates="project", cascade="all, delete-orphan"

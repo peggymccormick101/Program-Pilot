@@ -30,6 +30,7 @@ class ProjectOut(BaseModel):
     name: str
     jira_project_key: Optional[str] = None
     jira_issue_key: Optional[str] = None
+    selected_release: Optional[str] = None
 
 
 class ProjectUpdate(BaseModel):
@@ -63,3 +64,7 @@ class SelectProgramRequest(BaseModel):
 
 class NewProgramRequest(BaseModel):
     name: str
+
+
+class SelectReleaseRequest(BaseModel):
+    release: str

@@ -61,6 +61,14 @@ export function createProgram(name) {
   return request("/programs", { method: "POST", body: JSON.stringify({ name }) });
 }
 
+export function listReleases() {
+  return request("/releases");
+}
+
+export function selectRelease(release) {
+  return request("/releases/select", { method: "POST", body: JSON.stringify({ release }) });
+}
+
 export function downloadUrl(fileId) {
   return `/api/files/${fileId}`;
 }

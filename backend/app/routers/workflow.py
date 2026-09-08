@@ -280,6 +280,53 @@ def submit_capacity(node_id: int, payload: schemas.CapacityInput, db: Session = 
     return _serialize(node, _ordered_leaves(phase_1))
 
 
+def _get_program_features(project: models.Project) -> list[dict]:
+    """Every Feature actually scoped to this program -- linked to its
+    Jira issue via an "Implements" relationship -- not every Feature in
+    the whole Jira project. Reads the program issue's actual link data
+    rather than JQL's linkedIssues() function, whose inward/outward
+    description text-matching is less predictable than matching on the
+    link type's name directly."""
+    feature_keys = (
+        jira_client.get_linked_issue_keys(project.jira_issue_key, "Implements")
+        if project.jira_issue_key
+        else []
+    )
+    if not feature_keys:
+        return []
+    extra_jql = "key in (" + ",".join(feature_keys) + ")"
+    return jira_client.search_features(project.jira_project_key or "", extra_jql=extra_jql)
+
+
+def _normalize_release(raw) -> str | None:
+    """A "Release" field can come back as a plain string, a select-field
+    {"value": ...}, or a Jira Version-type field {"name": ...} --
+    normalize whichever shape it is."""
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        return raw.get("value") or raw.get("name")
+    return raw
+
+
+@router.get("/releases", response_model=list[str])
+def list_releases(db: Session = Depends(get_db)):
+    """Every distinct Release value used by this program's own linked
+    Features -- what the release picker (gating Phases 2-5) offers."""
+    project = _get_project(db)
+    features = _handle_errors(_get_program_features, project)
+    values = {_normalize_release(f.get("release")) for f in features}
+    return sorted(v for v in values if v)
+
+
+@router.post("/releases/select", response_model=schemas.WorkflowOut)
+def select_release(payload: schemas.SelectReleaseRequest, db: Session = Depends(get_db)):
+    project = _get_project(db)
+    project.selected_release = payload.release
+    db.commit()
+    return get_workflow(db)
+
+
 def _run_roadmap_options(db: Session, project: models.Project, node: models.WorkflowNode) -> dict:
     capacity_node = (
         db.query(models.WorkflowNode)
@@ -291,22 +338,7 @@ def _run_roadmap_options(db: Session, project: models.Project, node: models.Work
     )
     capacity = json.loads(capacity_node.output) if capacity_node and capacity_node.output else {}
 
-    # Only Features actually scoped to this program -- linked to its Jira
-    # issue via an "Implements" relationship -- go into the roadmap, not
-    # every Feature in the whole Jira project. Reads the program issue's
-    # actual link data rather than JQL's linkedIssues() function, whose
-    # inward/outward description text-matching is less predictable than
-    # matching on the link type's name directly.
-    feature_keys = (
-        jira_client.get_linked_issue_keys(project.jira_issue_key, "Implements")
-        if project.jira_issue_key
-        else []
-    )
-    if feature_keys:
-        extra_jql = "key in (" + ",".join(feature_keys) + ")"
-        features = jira_client.search_features(project.jira_project_key or "", extra_jql=extra_jql)
-    else:
-        features = []
+    features = _get_program_features(project)
     result = ai.generate_roadmap_options(features, capacity)
 
     docx_bytes = roadmap_docx.build_roadmap_docx(result, program_name=project.name)

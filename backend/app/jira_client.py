@@ -34,6 +34,7 @@ JIRA_FEATURE_FIELDS = {
     "pdm_frontend_estimate": "customfield_10102",
     "feature_dependencies": "customfield_10103",
     "rice_assumptions": "customfield_10104",
+    "release": "customfield_10140",
 }
 
 
