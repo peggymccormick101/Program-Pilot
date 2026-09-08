@@ -72,7 +72,7 @@ function CapacityForm({ node, busyId, onSubmitCapacity }) {
   );
 }
 
-function StepRow({ node, busyId, nodeErrors, onComplete, onRun, onReopen, onSubmitCapacity }) {
+function StepRow({ node, busyId, nodeErrors, onComplete, onRun, onReopen, onSubmitCapacity, allowUndo = true }) {
   const isBusy = busyId === node.id;
   const isAutomated = node.automation_type === "automated";
   const isInput = node.automation_type === "input";
@@ -111,7 +111,7 @@ function StepRow({ node, busyId, nodeErrors, onComplete, onRun, onReopen, onSubm
             {isBusy ? "Running..." : "Run"}
           </button>
         )}
-        {node.status === "complete" && !isInput && (
+        {node.status === "complete" && !isInput && allowUndo && (
           <button className="ghost-button" onClick={() => onReopen(node.id)} disabled={isBusy}>
             Undo
           </button>
@@ -149,63 +149,37 @@ const PHASE2_STEPS = [
   { title: "Update the Roadmap & Jira", state: "RoadmapJiraUpdated", description: null },
 ];
 
-function Phase2StepRow({ step, index, feature, isNext, onAdvance, busy }) {
-  const isComplete = index <= feature.state_index;
-  const status = isComplete ? "complete" : isNext ? "available" : "locked";
-  return (
-    <div className={`step-row step-${status}`}>
-      <div className="step-main">
-        <div className="step-title-row">
-          <span className="step-title">{step.title}</span>
-          <StatusBadge status={status} />
-        </div>
-        {step.description && <p className="step-description">{step.description}</p>}
-      </div>
-      <div className="step-actions">
-        {isNext && (
-          <button onClick={() => onAdvance(feature)} disabled={busy}>
-            {busy ? "Saving..." : "Mark complete"}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Phase2FeatureDetail({ feature, onAdvance, busy, onBack }) {
+// Builds WorkflowNodeOut-shaped virtual nodes for the selected Feature,
+// so Phase 2 (and later 3-5) can render through the exact same
+// StepRow/WorkflowNode components Phase 1 uses -- same look, same
+// interaction pattern -- instead of a bespoke component.
+function buildFeatureStepNodes(feature) {
   const nextIndex = feature.state_index + 1;
-  return (
-    <div className="phase2-feature-detail">
-      <div className="phase2-feature-header">
-        <div>
-          <span className="feature-state-id">{feature.feature_id || feature.issue_key}</span>
-          <span className="feature-state-summary">{feature.summary}</span>
-        </div>
-        <button className="ghost-button" onClick={onBack}>
-          Change Feature
-        </button>
-      </div>
-      <div className="task-group-children">
-        {PHASE2_STEPS.map((step, i) => (
-          <Phase2StepRow
-            key={step.state}
-            step={step}
-            index={i}
-            feature={feature}
-            isNext={i === nextIndex}
-            onAdvance={onAdvance}
-            busy={busy}
-          />
-        ))}
-      </div>
-    </div>
-  );
+  return PHASE2_STEPS.map((step, i) => ({
+    id: step.state,
+    title: step.title,
+    description: step.description,
+    phase_number: 2,
+    is_leaf: true,
+    automation_type: "manual",
+    ai_harness: null,
+    status: i <= feature.state_index ? "complete" : i === nextIndex ? "available" : "locked",
+    completed_at: null,
+    output: null,
+    output_file_id: null,
+    children: [],
+  }));
 }
 
-function Phase2Board({ features, loadError, busyKey, onAdvance }) {
-  const [selectedKey, setSelectedKey] = useState(null);
-  const selectedFeature = features?.find((f) => f.issue_key === selectedKey) || null;
-
+function Phase2Board({ feature, busy, error, onAdvance }) {
+  const stepNodes = feature ? buildFeatureStepNodes(feature) : [];
+  // Only the "available" (next) step is ever clickable, so a single
+  // shared busyId is enough -- StepRow compares it against each node's
+  // own id, so setting it to any other node's id would wrongly mark
+  // that node as busy too.
+  const nextStep = feature ? PHASE2_STEPS[feature.state_index + 1] : null;
+  const busyId = busy && nextStep ? nextStep.state : null;
+  const nodeErrors = error && nextStep ? { [nextStep.state]: error } : {};
   return (
     <div className="phase2-board">
       <a
@@ -217,45 +191,24 @@ function Phase2Board({ features, loadError, busyKey, onAdvance }) {
         Feature Technical Specification Template (reference for Requirements &amp; Architecture)
       </a>
 
-      {loadError && <p className="load-error">{loadError}</p>}
-      {features === null && !loadError && <p>Loading Features for this release...</p>}
+      {!feature && <p>Select a Feature above to see its steps.</p>}
 
-      {features && !selectedFeature && (
-        <>
-          {features.length === 0 && (
-            <p className="program-picker-empty">No Features found for this release.</p>
-          )}
-          {features.length > 0 && (
-            <ul className="program-list">
-              {features.map((f) => {
-                const label =
-                  f.state_index >= PHASE2_STEPS.length - 1
-                    ? "Complete"
-                    : f.state_index >= 0
-                    ? `${f.state_index + 1} of ${PHASE2_STEPS.length} complete`
-                    : "Not started";
-                return (
-                  <li key={f.issue_key} className="program-list-item">
-                    <span className="program-list-name">
-                      {f.feature_id || f.issue_key} - {f.summary}
-                    </span>
-                    <span className="program-list-key">{label}</span>
-                    <button onClick={() => setSelectedKey(f.issue_key)}>Select</button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </>
-      )}
-
-      {selectedFeature && (
-        <Phase2FeatureDetail
-          feature={selectedFeature}
-          onAdvance={onAdvance}
-          busy={busyKey === selectedFeature.issue_key}
-          onBack={() => setSelectedKey(null)}
-        />
+      {feature && (
+        <div className="task-group-children">
+          {stepNodes.map((node) => (
+            <WorkflowNode
+              key={node.id}
+              node={node}
+              busyId={busyId}
+              nodeErrors={nodeErrors}
+              onComplete={() => onAdvance(feature)}
+              onRun={() => {}}
+              onReopen={() => {}}
+              onSubmitCapacity={() => {}}
+              allowUndo={false}
+            />
+          ))}
+        </div>
       )}
 
       <div className="phase2-summary-action">
@@ -267,7 +220,16 @@ function Phase2Board({ features, loadError, busyKey, onAdvance }) {
   );
 }
 
-function PhaseCard({ phase, active, phase2Features, phase2LoadError, phase2BusyKey, onAdvancePhase2Feature, ...actions }) {
+function PhaseCard({
+  phase,
+  active,
+  phase2Features,
+  selectedFeature,
+  phase2Busy,
+  phase2Error,
+  onAdvancePhase2Feature,
+  ...actions
+}) {
   const phaseClass = PHASE_CLASS[phase.phase_number];
   const isPhase2 = phase.phase_number === 2;
   const allPhase2Complete =
@@ -301,9 +263,9 @@ function PhaseCard({ phase, active, phase2Features, phase2LoadError, phase2BusyK
         </div>
       ) : isPhase2 ? (
         <Phase2Board
-          features={phase2Features}
-          loadError={phase2LoadError}
-          busyKey={phase2BusyKey}
+          feature={selectedFeature}
+          busy={phase2Busy}
+          error={phase2Error}
           onAdvance={onAdvancePhase2Feature}
         />
       ) : (
@@ -388,6 +350,67 @@ function ReleaseGate({ selectedRelease, onSelect }) {
           <button type="submit" disabled={busy}>
             {busy ? "Selecting..." : "Select Release"}
           </button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function FeatureGate({ features, loadError, selectedFeatureKey, onSelect }) {
+  const [editing, setEditing] = useState(true);
+  const [choice, setChoice] = useState("");
+
+  useEffect(() => {
+    if (selectedFeatureKey) setEditing(false);
+  }, [selectedFeatureKey]);
+
+  useEffect(() => {
+    if (features && features.length > 0 && !choice) setChoice(features[0].issue_key);
+  }, [features]);
+
+  function submit(e) {
+    e.preventDefault();
+    if (!choice) return;
+    onSelect(choice);
+    setEditing(false);
+  }
+
+  const selected = features?.find((f) => f.issue_key === selectedFeatureKey);
+
+  if (!editing && selected) {
+    return (
+      <div className="release-gate release-gate-summary">
+        <span className="release-gate-label">Feature</span>
+        <span className="release-gate-value">
+          {selected.feature_id || selected.issue_key} - {selected.summary}
+        </span>
+        <button className="ghost-button" onClick={() => setEditing(true)}>
+          Change
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="release-gate release-gate-picker">
+      <p className="release-gate-intro">
+        Phases 2-5 apply to a single Feature within this release. Select one to continue.
+      </p>
+      {loadError && <p className="load-error">{loadError}</p>}
+      {features === null && !loadError && <p>Loading Features for this release...</p>}
+      {features && features.length === 0 && (
+        <p className="program-picker-empty">No Features found for this release.</p>
+      )}
+      {features && features.length > 0 && (
+        <form className="release-gate-form" onSubmit={submit}>
+          <select value={choice} onChange={(e) => setChoice(e.target.value)}>
+            {features.map((f) => (
+              <option key={f.issue_key} value={f.issue_key}>
+                {f.feature_id || f.issue_key} - {f.summary}
+              </option>
+            ))}
+          </select>
+          <button type="submit">Select Feature</button>
         </form>
       )}
     </div>
@@ -521,8 +544,9 @@ export default function App() {
   const [nodeErrors, setNodeErrors] = useState({});
   const [savingProject, setSavingProject] = useState(false);
   const [phase2Features, setPhase2Features] = useState(null);
-  const [phase2LoadError, setPhase2LoadError] = useState(null);
-  const [phase2BusyKey, setPhase2BusyKey] = useState(null);
+  const [phase2Error, setPhase2Error] = useState(null);
+  const [phase2Busy, setPhase2Busy] = useState(false);
+  const [selectedFeatureKey, setSelectedFeatureKey] = useState(null);
 
   async function refresh() {
     try {
@@ -559,27 +583,28 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    setSelectedFeatureKey(null);
     if (!data?.project?.selected_release) {
       setPhase2Features(null);
       return;
     }
     setPhase2Features(null);
-    setPhase2LoadError(null);
+    setPhase2Error(null);
     listPhase2Features()
       .then(setPhase2Features)
-      .catch((e) => setPhase2LoadError(e.message));
+      .catch((e) => setPhase2Error(e.message));
   }, [data?.project?.id, data?.project?.selected_release]);
 
   async function handleAdvancePhase2Feature(feature) {
-    setPhase2BusyKey(feature.issue_key);
-    setPhase2LoadError(null);
+    setPhase2Busy(true);
+    setPhase2Error(null);
     try {
       const updated = await advancePhase2Feature(feature.issue_key, feature.state);
       setPhase2Features((prev) => prev.map((f) => (f.issue_key === feature.issue_key ? { ...f, ...updated } : f)));
     } catch (e) {
-      setPhase2LoadError(e.message);
+      setPhase2Error(e.message);
     } finally {
-      setPhase2BusyKey(null);
+      setPhase2Busy(false);
     }
   }
 
@@ -703,6 +728,14 @@ export default function App() {
                     selectedRelease={data.project.selected_release}
                     onSelect={handleSelectRelease}
                   />
+                  {data.project.selected_release && (
+                    <FeatureGate
+                      features={phase2Features}
+                      loadError={phase2Error}
+                      selectedFeatureKey={selectedFeatureKey}
+                      onSelect={setSelectedFeatureKey}
+                    />
+                  )}
                   {data.project.selected_release &&
                     data.phases.slice(1).map((phase) => (
                       <PhaseCard
@@ -716,8 +749,9 @@ export default function App() {
                         onRun={handleRun}
                         onSubmitCapacity={handleSubmitCapacity}
                         phase2Features={phase2Features}
-                        phase2LoadError={phase2LoadError}
-                        phase2BusyKey={phase2BusyKey}
+                        selectedFeature={phase2Features?.find((f) => f.issue_key === selectedFeatureKey) || null}
+                        phase2Busy={phase2Busy}
+                        phase2Error={phase2Error}
                         onAdvancePhase2Feature={handleAdvancePhase2Feature}
                       />
                     ))}
