@@ -137,53 +137,74 @@ function WorkflowNode({ node, ...actions }) {
   );
 }
 
-const FEATURE_STATE_LABELS = ["Requirements", "Architecture", "Epics", "Estimate", "Commit", "Roadmap"];
+// Titles match exactly what's tracked in Jira's per-Feature "Feature
+// State" field (see backend FEATURE_STATE_SEQUENCE) -- description is
+// left blank for now, ready for explanatory text once supplied.
+const PHASE2_STEPS = [
+  { title: "Define & Review Requirements", state: "RequirementsApproved", description: null },
+  { title: "Define & Review Architecture", state: "ArchitectureApproved", description: null },
+  { title: "Define Epics", state: "EpicsDefined", description: null },
+  { title: "Estimate Epics (development)", state: "DevEstimated", description: null },
+  { title: "Commit the Release", state: "FeatureCommitted", description: null },
+  { title: "Update the Roadmap & Jira", state: "RoadmapJiraUpdated", description: null },
+];
 
-function FeatureStateRow({ feature, onAdvance, busy }) {
-  const isDone = feature.state_index >= FEATURE_STATE_LABELS.length - 1;
+function Phase2StepRow({ step, index, feature, isNext, onAdvance, busy }) {
+  const isComplete = index <= feature.state_index;
+  const status = isComplete ? "complete" : isNext ? "available" : "locked";
   return (
-    <div className="feature-state-row">
-      <div className="feature-state-heading">
-        <span className="feature-state-id">{feature.feature_id || feature.issue_key}</span>
-        <span className="feature-state-summary">{feature.summary}</span>
+    <div className={`step-row step-${status}`}>
+      <div className="step-main">
+        <div className="step-title-row">
+          <span className="step-title">{step.title}</span>
+          <StatusBadge status={status} />
+        </div>
+        {step.description && <p className="step-description">{step.description}</p>}
       </div>
-      <div className="feature-state-chips">
-        {FEATURE_STATE_LABELS.map((label, i) => (
-          <span key={label} className={`feature-chip ${i <= feature.state_index ? "feature-chip-done" : ""}`}>
-            {label}
-          </span>
-        ))}
+      <div className="step-actions">
+        {isNext && (
+          <button onClick={() => onAdvance(feature)} disabled={busy}>
+            {busy ? "Saving..." : "Mark complete"}
+          </button>
+        )}
       </div>
-      <button onClick={() => onAdvance(feature)} disabled={busy || isDone}>
-        {busy ? "Saving..." : isDone ? "Complete" : "Mark Next Complete"}
-      </button>
     </div>
   );
 }
 
-function Phase2Board() {
-  const [features, setFeatures] = useState(null);
-  const [loadError, setLoadError] = useState(null);
-  const [busyKey, setBusyKey] = useState(null);
+function Phase2FeatureDetail({ feature, onAdvance, busy, onBack }) {
+  const nextIndex = feature.state_index + 1;
+  return (
+    <div className="phase2-feature-detail">
+      <div className="phase2-feature-header">
+        <div>
+          <span className="feature-state-id">{feature.feature_id || feature.issue_key}</span>
+          <span className="feature-state-summary">{feature.summary}</span>
+        </div>
+        <button className="ghost-button" onClick={onBack}>
+          Change Feature
+        </button>
+      </div>
+      <div className="task-group-children">
+        {PHASE2_STEPS.map((step, i) => (
+          <Phase2StepRow
+            key={step.state}
+            step={step}
+            index={i}
+            feature={feature}
+            isNext={i === nextIndex}
+            onAdvance={onAdvance}
+            busy={busy}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
-  useEffect(() => {
-    listPhase2Features()
-      .then(setFeatures)
-      .catch((e) => setLoadError(e.message));
-  }, []);
-
-  async function handleAdvance(feature) {
-    setBusyKey(feature.issue_key);
-    setLoadError(null);
-    try {
-      const updated = await advancePhase2Feature(feature.issue_key, feature.state);
-      setFeatures((prev) => prev.map((f) => (f.issue_key === feature.issue_key ? { ...f, ...updated } : f)));
-    } catch (e) {
-      setLoadError(e.message);
-    } finally {
-      setBusyKey(null);
-    }
-  }
+function Phase2Board({ features, loadError, busyKey, onAdvance }) {
+  const [selectedKey, setSelectedKey] = useState(null);
+  const selectedFeature = features?.find((f) => f.issue_key === selectedKey) || null;
 
   return (
     <div className="phase2-board">
@@ -195,23 +216,48 @@ function Phase2Board() {
       >
         Feature Technical Specification Template (reference for Requirements &amp; Architecture)
       </a>
+
       {loadError && <p className="load-error">{loadError}</p>}
       {features === null && !loadError && <p>Loading Features for this release...</p>}
-      {features && features.length === 0 && (
-        <p className="program-picker-empty">No Features found for this release.</p>
+
+      {features && !selectedFeature && (
+        <>
+          {features.length === 0 && (
+            <p className="program-picker-empty">No Features found for this release.</p>
+          )}
+          {features.length > 0 && (
+            <ul className="program-list">
+              {features.map((f) => {
+                const label =
+                  f.state_index >= PHASE2_STEPS.length - 1
+                    ? "Complete"
+                    : f.state_index >= 0
+                    ? `${f.state_index + 1} of ${PHASE2_STEPS.length} complete`
+                    : "Not started";
+                return (
+                  <li key={f.issue_key} className="program-list-item">
+                    <span className="program-list-name">
+                      {f.feature_id || f.issue_key} - {f.summary}
+                    </span>
+                    <span className="program-list-key">{label}</span>
+                    <button onClick={() => setSelectedKey(f.issue_key)}>Select</button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
       )}
-      {features && features.length > 0 && (
-        <div className="feature-state-list">
-          {features.map((f) => (
-            <FeatureStateRow
-              key={f.issue_key}
-              feature={f}
-              onAdvance={handleAdvance}
-              busy={busyKey === f.issue_key}
-            />
-          ))}
-        </div>
+
+      {selectedFeature && (
+        <Phase2FeatureDetail
+          feature={selectedFeature}
+          onAdvance={onAdvance}
+          busy={busyKey === selectedFeature.issue_key}
+          onBack={() => setSelectedKey(null)}
+        />
       )}
+
       <div className="phase2-summary-action">
         <button className="ghost-button" disabled title="Not yet wired up">
           Generate Exec Feature Summary
@@ -221,9 +267,15 @@ function Phase2Board() {
   );
 }
 
-function PhaseCard({ phase, active, ...actions }) {
+function PhaseCard({ phase, active, phase2Features, phase2LoadError, phase2BusyKey, onAdvancePhase2Feature, ...actions }) {
   const phaseClass = PHASE_CLASS[phase.phase_number];
   const isPhase2 = phase.phase_number === 2;
+  const allPhase2Complete =
+    isPhase2 &&
+    phase2Features &&
+    phase2Features.length > 0 &&
+    phase2Features.every((f) => f.state_index >= PHASE2_STEPS.length - 1);
+
   return (
     <section className={`phase-card ${phaseClass} ${active ? "phase-active" : "phase-placeholder"}`}>
       <div className="phase-header">
@@ -233,7 +285,9 @@ function PhaseCard({ phase, active, ...actions }) {
           {!active && !isPhase2 && <p className="phase-coming-soon">Coming soon</p>}
         </div>
         {isPhase2 ? (
-          <span className="status-badge status-in_progress">Active</span>
+          <span className={`status-badge status-${allPhase2Complete ? "complete" : "in_progress"}`}>
+            {allPhase2Complete ? "Complete" : "Active"}
+          </span>
         ) : (
           <StatusBadge status={phase.status} />
         )}
@@ -246,7 +300,12 @@ function PhaseCard({ phase, active, ...actions }) {
           ))}
         </div>
       ) : isPhase2 ? (
-        <Phase2Board />
+        <Phase2Board
+          features={phase2Features}
+          loadError={phase2LoadError}
+          busyKey={phase2BusyKey}
+          onAdvance={onAdvancePhase2Feature}
+        />
       ) : (
         <ul className="placeholder-task-list">
           {phase.children.map((child) => (
@@ -461,6 +520,9 @@ export default function App() {
   const [busyId, setBusyId] = useState(null);
   const [nodeErrors, setNodeErrors] = useState({});
   const [savingProject, setSavingProject] = useState(false);
+  const [phase2Features, setPhase2Features] = useState(null);
+  const [phase2LoadError, setPhase2LoadError] = useState(null);
+  const [phase2BusyKey, setPhase2BusyKey] = useState(null);
 
   async function refresh() {
     try {
@@ -495,6 +557,31 @@ export default function App() {
   useEffect(() => {
     refresh();
   }, []);
+
+  useEffect(() => {
+    if (!data?.project?.selected_release) {
+      setPhase2Features(null);
+      return;
+    }
+    setPhase2Features(null);
+    setPhase2LoadError(null);
+    listPhase2Features()
+      .then(setPhase2Features)
+      .catch((e) => setPhase2LoadError(e.message));
+  }, [data?.project?.id, data?.project?.selected_release]);
+
+  async function handleAdvancePhase2Feature(feature) {
+    setPhase2BusyKey(feature.issue_key);
+    setPhase2LoadError(null);
+    try {
+      const updated = await advancePhase2Feature(feature.issue_key, feature.state);
+      setPhase2Features((prev) => prev.map((f) => (f.issue_key === feature.issue_key ? { ...f, ...updated } : f)));
+    } catch (e) {
+      setPhase2LoadError(e.message);
+    } finally {
+      setPhase2BusyKey(null);
+    }
+  }
 
   async function handleComplete(id) {
     setBusyId(id);
@@ -628,6 +715,10 @@ export default function App() {
                         onReopen={handleReopen}
                         onRun={handleRun}
                         onSubmitCapacity={handleSubmitCapacity}
+                        phase2Features={phase2Features}
+                        phase2LoadError={phase2LoadError}
+                        phase2BusyKey={phase2BusyKey}
+                        onAdvancePhase2Feature={handleAdvancePhase2Feature}
                       />
                     ))}
                 </div>
