@@ -189,7 +189,7 @@ function Phase2Board() {
     <div className="phase2-board">
       <a
         className="phase2-template-link"
-        href="https://github.com/peggymccormick101/Program-Pilot/blob/main/Feature_Technical_Specification_Template_v1.docx"
+        href="https://raw.githubusercontent.com/peggymccormick101/Program-Pilot/main/Feature_Technical_Specification_Template_v1.docx"
         target="_blank"
         rel="noreferrer"
       >
