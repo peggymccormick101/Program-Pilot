@@ -100,12 +100,18 @@ PHASE_1_TASKS = [
 
 # Phases 2-5: task titles only, nothing actionable yet.
 PLACEHOLDER_PHASES = [
+    # Phase 2's actual UI is a per-Feature checklist (see
+    # workflow.FEATURE_STATE_SEQUENCE / Phase2Board), driven live from
+    # each Feature's own Jira issue rather than these WorkflowNode
+    # leaves -- kept here only as documentation of the task names.
     (2, "Quarterly Release Initiation", [
-        "Define Feature Requirements & Architecture",
-        "Generate Exec Feature Summary",
+        "Define & Review Requirements",
+        "Define & Review Architecture",
         "Define Epics",
+        "Estimate Epics (development)",
         "Commit the Release",
-        "Update the Roadmap",
+        "Update the Roadmap & Jira",
+        "Generate Exec Feature Summary",
     ]),
     (3, "Release Planning", [
         "Document Design",

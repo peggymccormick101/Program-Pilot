@@ -68,3 +68,15 @@ class NewProgramRequest(BaseModel):
 
 class SelectReleaseRequest(BaseModel):
     release: str
+
+
+class FeatureStateOut(BaseModel):
+    issue_key: str
+    feature_id: Optional[str] = None
+    summary: Optional[str] = None
+    state: Optional[str] = None
+    state_index: int
+
+
+class AdvanceFeatureStateRequest(BaseModel):
+    current_state: Optional[str] = None

@@ -452,6 +452,75 @@ h2, h3 {
   margin: 4px 0;
 }
 
+.phase2-board {
+  margin-top: 12px;
+}
+
+.feature-state-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.feature-state-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+}
+
+.feature-state-heading {
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+}
+
+.feature-state-id {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.feature-state-summary {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.feature-state-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.feature-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  color: var(--text-faint);
+}
+
+.feature-chip-done {
+  background: rgba(46, 158, 68, 0.15);
+  color: var(--green);
+  border-color: transparent;
+}
+
+.phase2-summary-action {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
 .step-row {
   display: flex;
   align-items: flex-start;

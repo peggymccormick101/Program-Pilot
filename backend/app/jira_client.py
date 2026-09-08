@@ -35,7 +35,13 @@ JIRA_FEATURE_FIELDS = {
     "feature_dependencies": "customfield_10103",
     "rice_assumptions": "customfield_10104",
     "release": "customfield_10140",
+    "feature_state": "customfield_10141",
 }
+
+# "Feature State" -- a per-Feature single-select dropdown tracking that
+# Feature's own progress through Phase 2 (Quarterly Release Initiation).
+# Same value shape as PROGRAM_STATE_STATUS_FIELD: {"value": "..."}.
+FEATURE_STATE_FIELD = JIRA_FEATURE_FIELDS["feature_state"]
 
 
 # Program-level state is persisted on a Task issue (one per program),

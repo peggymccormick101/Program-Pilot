@@ -298,9 +298,9 @@ def _get_program_features(project: models.Project) -> list[dict]:
     return jira_client.search_features(project.jira_project_key or "", extra_jql=extra_jql)
 
 
-def _normalize_release(raw) -> str | None:
-    """A "Release" field can come back as a plain string, a select-field
-    {"value": ...}, or a Jira Version-type field {"name": ...} --
+def _normalize_field_value(raw) -> str | None:
+    """A select-type field can come back as a plain string, {"value":
+    ...} (select field), or {"name": ...} (Jira Version-type field) --
     normalize whichever shape it is."""
     if raw is None:
         return None
@@ -315,7 +315,7 @@ def list_releases(db: Session = Depends(get_db)):
     Features -- what the release picker (gating Phases 2-5) offers."""
     project = _get_project(db)
     features = _handle_errors(_get_program_features, project)
-    values = {_normalize_release(f.get("release")) for f in features}
+    values = {_normalize_field_value(f.get("release")) for f in features}
     return sorted(v for v in values if v)
 
 
@@ -325,6 +325,70 @@ def select_release(payload: schemas.SelectReleaseRequest, db: Session = Depends(
     project.selected_release = payload.release
     db.commit()
     return get_workflow(db)
+
+
+# Phase 2 (Quarterly Release Initiation) tracks progress per Feature,
+# not on the program's own WorkflowNode tree -- each Feature already
+# has a stable Jira key, so its state is read/written directly on that
+# Feature's own issue rather than mirrored locally. "Generate Exec
+# Feature Summary" isn't part of this sequence -- it's a standalone
+# action for the whole release, not a per-Feature state.
+FEATURE_STATE_SEQUENCE = [
+    "RequirementsApproved",
+    "ArchitectureApproved",
+    "EpicsDefined",
+    "DevEstimated",
+    "FeatureCommitted",
+    "RoadmapJiraUpdated",
+]
+
+
+def _release_features(project: models.Project) -> list[dict]:
+    features = _get_program_features(project)
+    return [f for f in features if _normalize_field_value(f.get("release")) == project.selected_release]
+
+
+@router.get("/phase2/features", response_model=list[schemas.FeatureStateOut])
+def list_phase2_features(db: Session = Depends(get_db)):
+    project = _get_project(db)
+    if not project.selected_release:
+        raise HTTPException(status_code=400, detail="Select a release first.")
+    features = _handle_errors(_release_features, project)
+    results = []
+    for f in features:
+        state = _normalize_field_value(f.get("feature_state"))
+        state_index = FEATURE_STATE_SEQUENCE.index(state) if state in FEATURE_STATE_SEQUENCE else -1
+        results.append(
+            schemas.FeatureStateOut(
+                issue_key=f["issue_key"],
+                feature_id=f.get("feature_id"),
+                summary=f.get("summary"),
+                state=state,
+                state_index=state_index,
+            )
+        )
+    return results
+
+
+@router.post("/phase2/features/{issue_key}/advance", response_model=schemas.FeatureStateOut)
+def advance_phase2_feature(
+    issue_key: str, payload: schemas.AdvanceFeatureStateRequest, db: Session = Depends(get_db)
+):
+    if payload.current_state is None:
+        next_index = 0
+    elif payload.current_state not in FEATURE_STATE_SEQUENCE:
+        raise HTTPException(status_code=400, detail="Unknown feature state.")
+    else:
+        current_index = FEATURE_STATE_SEQUENCE.index(payload.current_state)
+        if current_index >= len(FEATURE_STATE_SEQUENCE) - 1:
+            raise HTTPException(status_code=409, detail="This Feature has already reached the last tracked state.")
+        next_index = current_index + 1
+
+    next_state = FEATURE_STATE_SEQUENCE[next_index]
+    _handle_errors(
+        jira_client.update_issue, issue_key, {jira_client.FEATURE_STATE_FIELD: {"value": next_state}}
+    )
+    return schemas.FeatureStateOut(issue_key=issue_key, state=next_state, state_index=next_index)
 
 
 def _run_roadmap_options(db: Session, project: models.Project, node: models.WorkflowNode) -> dict:

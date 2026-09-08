@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import {
+  advancePhase2Feature,
   completeNode,
   createProgram,
   downloadUrl,
   getWorkflow,
   listJiraPrograms,
+  listPhase2Features,
   listReleases,
   reopenNode,
   runNode,
@@ -135,17 +137,98 @@ function WorkflowNode({ node, ...actions }) {
   );
 }
 
+const FEATURE_STATE_LABELS = ["Requirements", "Architecture", "Epics", "Estimate", "Commit", "Roadmap"];
+
+function FeatureStateRow({ feature, onAdvance, busy }) {
+  const isDone = feature.state_index >= FEATURE_STATE_LABELS.length - 1;
+  return (
+    <div className="feature-state-row">
+      <div className="feature-state-heading">
+        <span className="feature-state-id">{feature.feature_id || feature.issue_key}</span>
+        <span className="feature-state-summary">{feature.summary}</span>
+      </div>
+      <div className="feature-state-chips">
+        {FEATURE_STATE_LABELS.map((label, i) => (
+          <span key={label} className={`feature-chip ${i <= feature.state_index ? "feature-chip-done" : ""}`}>
+            {label}
+          </span>
+        ))}
+      </div>
+      <button onClick={() => onAdvance(feature)} disabled={busy || isDone}>
+        {busy ? "Saving..." : isDone ? "Complete" : "Mark Next Complete"}
+      </button>
+    </div>
+  );
+}
+
+function Phase2Board() {
+  const [features, setFeatures] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const [busyKey, setBusyKey] = useState(null);
+
+  useEffect(() => {
+    listPhase2Features()
+      .then(setFeatures)
+      .catch((e) => setLoadError(e.message));
+  }, []);
+
+  async function handleAdvance(feature) {
+    setBusyKey(feature.issue_key);
+    setLoadError(null);
+    try {
+      const updated = await advancePhase2Feature(feature.issue_key, feature.state);
+      setFeatures((prev) => prev.map((f) => (f.issue_key === feature.issue_key ? { ...f, ...updated } : f)));
+    } catch (e) {
+      setLoadError(e.message);
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  return (
+    <div className="phase2-board">
+      {loadError && <p className="load-error">{loadError}</p>}
+      {features === null && !loadError && <p>Loading Features for this release...</p>}
+      {features && features.length === 0 && (
+        <p className="program-picker-empty">No Features found for this release.</p>
+      )}
+      {features && features.length > 0 && (
+        <div className="feature-state-list">
+          {features.map((f) => (
+            <FeatureStateRow
+              key={f.issue_key}
+              feature={f}
+              onAdvance={handleAdvance}
+              busy={busyKey === f.issue_key}
+            />
+          ))}
+        </div>
+      )}
+      <div className="phase2-summary-action">
+        <button className="ghost-button" disabled title="Not yet wired up">
+          Generate Exec Feature Summary
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function PhaseCard({ phase, active, ...actions }) {
   const phaseClass = PHASE_CLASS[phase.phase_number];
+  const isPhase2 = phase.phase_number === 2;
   return (
     <section className={`phase-card ${phaseClass} ${active ? "phase-active" : "phase-placeholder"}`}>
       <div className="phase-header">
         <span className="phase-number">{phase.phase_number}</span>
         <div>
           <h2>{phase.title}</h2>
-          {!active && <p className="phase-coming-soon">Coming soon</p>}
+          {!active && !isPhase2 && <p className="phase-coming-soon">Coming soon</p>}
         </div>
-        <StatusBadge status={phase.status} />
+        {isPhase2 ? (
+          <span className="status-badge status-in_progress">Active</span>
+        ) : (
+          <StatusBadge status={phase.status} />
+        )}
       </div>
 
       {active ? (
@@ -154,6 +237,8 @@ function PhaseCard({ phase, active, ...actions }) {
             <WorkflowNode key={child.id} node={child} {...actions} />
           ))}
         </div>
+      ) : isPhase2 ? (
+        <Phase2Board />
       ) : (
         <ul className="placeholder-task-list">
           {phase.children.map((child) => (

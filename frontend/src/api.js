@@ -69,6 +69,17 @@ export function selectRelease(release) {
   return request("/releases/select", { method: "POST", body: JSON.stringify({ release }) });
 }
 
+export function listPhase2Features() {
+  return request("/phase2/features");
+}
+
+export function advancePhase2Feature(issueKey, currentState) {
+  return request(`/phase2/features/${issueKey}/advance`, {
+    method: "POST",
+    body: JSON.stringify({ current_state: currentState }),
+  });
+}
+
 export function downloadUrl(fileId) {
   return `/api/files/${fileId}`;
 }
