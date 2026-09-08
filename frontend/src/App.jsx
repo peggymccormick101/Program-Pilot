@@ -4,6 +4,7 @@ import {
   completeNode,
   createProgram,
   downloadUrl,
+  generateExecFeatureSummary,
   getWorkflow,
   listJiraPrograms,
   listPhase2Features,
@@ -228,23 +229,71 @@ function buildFeatureStepNodes(feature) {
 }
 
 // "Generate Exec Feature Summary" isn't tied to a Feature State value --
-// it just needs to show up once Requirements have been reviewed. Its
-// own behavior isn't defined yet, so it's shown disabled for now.
-function buildExecSummaryNode(feature) {
-  return {
-    id: "exec-summary",
-    title: "Generate Exec Feature Summary",
-    description: "Details for this step are still being defined.",
-    phase_number: 2,
-    is_leaf: true,
-    automation_type: "manual",
-    ai_harness: null,
-    status: feature.state_index >= 0 ? "available" : "locked",
-    completed_at: null,
-    output: null,
-    output_file_id: null,
-    children: [],
-  };
+// it just needs to show up once Requirements have been reviewed. It
+// tries to pull the Feature Technical Specification Document straight
+// from the Feature's own Jira attachments first (by filename), falling
+// back to a manual upload if none is found there.
+function ExecSummaryStep({ feature, busy, error, result, onGenerate }) {
+  const [file, setFile] = useState(null);
+  const [showUpload, setShowUpload] = useState(false);
+  const locked = feature.state_index < 0;
+
+  function tryJiraAttachment() {
+    onGenerate(feature.issue_key, null).catch(() => setShowUpload(true));
+  }
+
+  function submitUpload(e) {
+    e.preventDefault();
+    if (!file) return;
+    onGenerate(feature.issue_key, file);
+  }
+
+  return (
+    <div className={`step-row ${locked ? "step-locked" : "step-available"}`}>
+      <div className="step-main">
+        <div className="step-title-row">
+          <span className="step-title">Generate Exec Feature Summary</span>
+          <StatusBadge status={locked ? "locked" : result ? "complete" : "available"} />
+        </div>
+        <p className="step-description">
+          Generates a single-slide executive summary from this Feature's Technical Specification
+          Document -- pulled automatically from its Jira attachments, or uploaded directly below.
+        </p>
+
+        {!locked && (
+          <div className="exec-summary-form">
+            <button onClick={tryJiraAttachment} disabled={busy}>
+              {busy ? "Generating..." : "Generate from Jira attachment"}
+            </button>
+            {!showUpload && (
+              <button className="ghost-button" onClick={() => setShowUpload(true)} disabled={busy}>
+                Upload instead
+              </button>
+            )}
+            {showUpload && (
+              <form className="exec-summary-upload" onSubmit={submitUpload}>
+                <input
+                  type="file"
+                  accept=".docx"
+                  onChange={(e) => setFile(e.target.files[0] || null)}
+                />
+                <button type="submit" disabled={busy || !file}>
+                  {busy ? "Generating..." : "Upload & Generate"}
+                </button>
+              </form>
+            )}
+          </div>
+        )}
+
+        {error && <p className="step-error">{error}</p>}
+        {result && (
+          <a className="step-download" href={downloadUrl(result.file_id)}>
+            Download Exec Feature Summary (.pptx)
+          </a>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // A container node for the two release-level steps, so they render
@@ -276,7 +325,17 @@ function buildReleaseActionsNode(features) {
   };
 }
 
-function Phase2Board({ feature, features, busy, error, onAdvance }) {
+function Phase2Board({
+  feature,
+  features,
+  busy,
+  error,
+  onAdvance,
+  execSummaryBusy,
+  execSummaryError,
+  execSummaryResult,
+  onGenerateExecSummary,
+}) {
   const stepNodes = feature ? buildFeatureStepNodes(feature) : [];
   // Only the "available" (next) step is ever clickable, so a single
   // shared busyId is enough -- StepRow compares it against each node's
@@ -312,16 +371,12 @@ function Phase2Board({ feature, features, busy, error, onAdvance }) {
             onSubmitCapacity={() => {}}
             allowUndo={false}
           />
-          <WorkflowNode
-            node={buildExecSummaryNode(feature)}
-            busyId={null}
-            nodeErrors={{}}
-            onComplete={() => {}}
-            onRun={() => {}}
-            onReopen={() => {}}
-            onSubmitCapacity={() => {}}
-            allowUndo={false}
-            disabledReason="Not yet wired up -- instructions for this step are coming."
+          <ExecSummaryStep
+            feature={feature}
+            busy={execSummaryBusy}
+            error={execSummaryError}
+            result={execSummaryResult}
+            onGenerate={onGenerateExecSummary}
           />
           {stepNodes.slice(1).map((node) => (
             <WorkflowNode
@@ -362,6 +417,10 @@ function PhaseCard({
   phase2Busy,
   phase2Error,
   onAdvancePhase2Feature,
+  execSummaryBusy,
+  execSummaryError,
+  execSummaryResult,
+  onGenerateExecSummary,
   ...actions
 }) {
   const phaseClass = PHASE_CLASS[phase.phase_number];
@@ -402,6 +461,10 @@ function PhaseCard({
           busy={phase2Busy}
           error={phase2Error}
           onAdvance={onAdvancePhase2Feature}
+          execSummaryBusy={execSummaryBusy}
+          execSummaryError={execSummaryError}
+          execSummaryResult={execSummaryResult}
+          onGenerateExecSummary={onGenerateExecSummary}
         />
       ) : (
         <ul className="placeholder-task-list">
@@ -682,6 +745,9 @@ export default function App() {
   const [phase2Error, setPhase2Error] = useState(null);
   const [phase2Busy, setPhase2Busy] = useState(false);
   const [selectedFeatureKey, setSelectedFeatureKey] = useState(null);
+  const [execSummaryBusy, setExecSummaryBusy] = useState(false);
+  const [execSummaryError, setExecSummaryError] = useState(null);
+  const [execSummaryResult, setExecSummaryResult] = useState(null);
 
   async function refresh() {
     try {
@@ -719,6 +785,8 @@ export default function App() {
 
   useEffect(() => {
     setSelectedFeatureKey(null);
+    setExecSummaryError(null);
+    setExecSummaryResult(null);
     if (!data?.project?.selected_release) {
       setPhase2Features(null);
       return;
@@ -740,6 +808,26 @@ export default function App() {
       setPhase2Error(e.message);
     } finally {
       setPhase2Busy(false);
+    }
+  }
+
+  function handleSelectFeature(issueKey) {
+    setSelectedFeatureKey(issueKey);
+    setExecSummaryError(null);
+    setExecSummaryResult(null);
+  }
+
+  async function handleGenerateExecSummary(issueKey, file) {
+    setExecSummaryBusy(true);
+    setExecSummaryError(null);
+    try {
+      const result = await generateExecFeatureSummary(issueKey, file);
+      setExecSummaryResult(result);
+    } catch (e) {
+      setExecSummaryError(e.message);
+      throw e;
+    } finally {
+      setExecSummaryBusy(false);
     }
   }
 
@@ -868,7 +956,7 @@ export default function App() {
                       features={phase2Features}
                       loadError={phase2Error}
                       selectedFeatureKey={selectedFeatureKey}
-                      onSelect={setSelectedFeatureKey}
+                      onSelect={handleSelectFeature}
                     />
                   )}
                   {data.project.selected_release &&
@@ -888,6 +976,10 @@ export default function App() {
                         phase2Busy={phase2Busy}
                         phase2Error={phase2Error}
                         onAdvancePhase2Feature={handleAdvancePhase2Feature}
+                        execSummaryBusy={execSummaryBusy}
+                        execSummaryError={execSummaryError}
+                        execSummaryResult={execSummaryResult}
+                        onGenerateExecSummary={handleGenerateExecSummary}
                       />
                     ))}
                 </div>

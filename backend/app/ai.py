@@ -182,3 +182,66 @@ def generate_roadmap_options(features: list[dict], capacity: dict) -> dict:
         schema=ROADMAP_OPTIONS_SCHEMA,
         max_tokens=24000,
     )
+
+
+EXEC_SUMMARY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "business_problem": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "3-4 short, punchy bullets (under ~14 words each).",
+        },
+        "customer_value": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "3-4 short, punchy bullets.",
+        },
+        "feature_scope": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "3-4 short, punchy bullets.",
+        },
+        "success_criteria": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "3-4 short, measurable bullets.",
+        },
+        "business_risks": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Exactly 4 short business (not technical) risk statements.",
+        },
+    },
+    "required": ["business_problem", "customer_value", "feature_scope", "success_criteria", "business_risks"],
+    "additionalProperties": False,
+}
+
+
+def generate_exec_feature_summary(ftsd_text: str, feature_name: str) -> dict:
+    """Phase 2's "Generate Exec Feature Summary" step. Returns structured
+    data; app/exec_summary_pptx.py renders it into the single-slide
+    executive deck the workflow step promises, matching the layout of
+    the reference slide the user approved."""
+    return _run_structured(
+        system=(
+            "You are the Head of Product Management presenting a feature to "
+            "executive leadership. Use the attached Feature Technical "
+            "Specification Document up to and including its Requirements "
+            "section (General Information and sections 1-2) -- ignore any "
+            "Architecture or other technical content that may appear later "
+            "in the document, even if present. Generate the content for a "
+            "single-page executive summary slide: business problem, "
+            "customer value, feature scope, success criteria, and business "
+            "risks. Do not include architecture, APIs, implementation "
+            "details, or technology choices anywhere in the output. Each "
+            "bullet should be short and punchy, ready for an executive "
+            "slide with minimal editing -- not full sentences copied from "
+            "the document. business_risks must be business risks (adoption, "
+            "cost, compliance, dependency, timing), not technical risks, and "
+            "must contain exactly 4 items."
+        ),
+        user_content=f"Feature: {feature_name}\n\nFeature Technical Specification Document:\n{ftsd_text}",
+        schema=EXEC_SUMMARY_SCHEMA,
+        max_tokens=4000,
+    )

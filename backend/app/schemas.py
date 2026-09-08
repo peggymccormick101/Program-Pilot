@@ -80,3 +80,9 @@ class FeatureStateOut(BaseModel):
 
 class AdvanceFeatureStateRequest(BaseModel):
     current_state: Optional[str] = None
+
+
+class ExecSummaryResult(BaseModel):
+    file_id: str
+    source: str  # "jira_attachment" or "uploaded"
+    source_filename: str

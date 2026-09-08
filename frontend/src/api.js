@@ -80,6 +80,30 @@ export function advancePhase2Feature(issueKey, currentState) {
   });
 }
 
+export async function generateExecFeatureSummary(issueKey, file) {
+  const formData = new FormData();
+  if (file) formData.append("ftsd", file);
+  // No explicit Content-Type here -- the browser sets the multipart
+  // boundary itself; setting it manually breaks the upload.
+  const res = await fetch(`/api/phase2/features/${issueKey}/exec-summary`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const data = await res.json();
+      detail = data.detail || detail;
+    } catch {
+      // ignore
+    }
+    const error = new Error(detail);
+    error.status = res.status;
+    throw error;
+  }
+  return res.json();
+}
+
 export function downloadUrl(fileId) {
   return `/api/files/${fileId}`;
 }

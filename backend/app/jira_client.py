@@ -240,6 +240,48 @@ def attach_file(issue_key: str, filename: str, content: bytes, content_type: str
         )
 
 
+def get_issue_attachments(issue_key: str) -> list[dict]:
+    """Every attachment on an issue: filename, content download URL, and
+    when it was added -- used to auto-find a Feature's Feature Technical
+    Specification Document instead of requiring the user to re-upload
+    it. Standard Jira Cloud REST shape (fields.attachment), not something
+    guessed at."""
+    base_url, email, api_token = _get_config()
+    response = requests.get(
+        f"{base_url}/rest/api/3/issue/{issue_key}",
+        headers={**_auth_header(email, api_token), "Accept": "application/json"},
+        params={"fields": "attachment"},
+        timeout=15,
+    )
+    if not response.ok:
+        raise JiraRequestError(
+            f"Jira attachment lookup failed (status {response.status_code}): {response.text[:300]}"
+        )
+    attachments = response.json().get("fields", {}).get("attachment", [])
+    return [
+        {
+            "filename": a.get("filename"),
+            "content_url": a.get("content"),
+            "created": a.get("created"),
+            "mime_type": a.get("mimeType"),
+        }
+        for a in attachments
+    ]
+
+
+def download_attachment(content_url: str) -> bytes:
+    """Download an attachment's raw bytes from its Jira content URL (from
+    get_issue_attachments) -- these require the same auth as any other
+    Jira API call, not a plain public fetch."""
+    _, email, api_token = _get_config()
+    response = requests.get(content_url, headers=_auth_header(email, api_token), timeout=30)
+    if not response.ok:
+        raise JiraRequestError(
+            f"Jira attachment download failed (status {response.status_code}): {response.text[:300]}"
+        )
+    return response.content
+
+
 def list_program_issues(project_key: str) -> list[dict]:
     """Every Program-labeled Task issue in this project (key + name),
     most recently updated first -- backs the "pick a program" screen."""

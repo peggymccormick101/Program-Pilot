@@ -4,12 +4,13 @@ import uuid
 from datetime import datetime
 
 import anthropic
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app import ai, jira_client, jira_state, models, roadmap_docx, schemas
+from app import ai, exec_summary_pptx, jira_client, jira_state, models, roadmap_docx, schemas
 from app.database import get_db
+from app.docx_text import extract_docx_text
 
 router = APIRouter(prefix="/api", tags=["workflow"])
 
@@ -402,6 +403,85 @@ def advance_phase2_feature(
     return schemas.FeatureStateOut(issue_key=issue_key, state=next_state, state_index=next_index)
 
 
+def _find_ftsd_attachment(issue_key: str) -> dict | None:
+    """The most recent attachment on the Feature's own issue whose name
+    looks like a Feature Technical Specification Document -- lets
+    "Generate Exec Feature Summary" pull it automatically instead of
+    requiring a re-upload, as long as the user attached it with a
+    recognizable name. Never guesses past that: no match, no auto-pull."""
+    attachments = jira_client.get_issue_attachments(issue_key)
+    candidates = [
+        a
+        for a in attachments
+        if a.get("filename")
+        and "technicalspecification" in a["filename"].lower().replace(" ", "").replace("_", "").replace("-", "")
+        and "template" not in a["filename"].lower()
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda a: a.get("created") or "", reverse=True)
+    return candidates[0]
+
+
+@router.post("/phase2/features/{issue_key}/exec-summary", response_model=schemas.ExecSummaryResult)
+async def generate_exec_feature_summary(
+    issue_key: str, ftsd: UploadFile | None = File(None), db: Session = Depends(get_db)
+):
+    project = _get_project(db)
+    features = _handle_errors(_release_features, project)
+    feature = next((f for f in features if f["issue_key"] == issue_key), None)
+    if not feature:
+        raise HTTPException(status_code=404, detail="Feature not found in the selected release.")
+
+    if ftsd is not None:
+        ftsd_bytes = await ftsd.read()
+        source_filename = ftsd.filename or "Feature_Technical_Specification.docx"
+        source = "uploaded"
+    else:
+        attachment = _handle_errors(_find_ftsd_attachment, issue_key)
+        if not attachment:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "No Feature Technical Specification Document found attached to "
+                    f"{issue_key} in Jira (looked for a filename containing "
+                    '"Technical Specification"). Upload the document directly instead.'
+                ),
+            )
+        ftsd_bytes = _handle_errors(jira_client.download_attachment, attachment["content_url"])
+        source_filename = attachment["filename"]
+        source = "jira_attachment"
+
+    try:
+        ftsd_text = extract_docx_text(ftsd_bytes)
+    except Exception:
+        raise HTTPException(
+            status_code=400, detail=f"Couldn't read {source_filename} -- is it a valid .docx file?"
+        )
+    if not ftsd_text.strip():
+        raise HTTPException(status_code=400, detail=f"{source_filename} appears to be empty.")
+
+    feature_name = feature.get("summary") or issue_key
+    result = _handle_errors(ai.generate_exec_feature_summary, ftsd_text, feature_name)
+
+    pptx_bytes = exec_summary_pptx.build_exec_summary_pptx(result, feature_name=feature_name)
+    file_id = f"{uuid.uuid4().hex}.pptx"
+    with open(os.path.join(GENERATED_FILES_DIR, file_id), "wb") as f:
+        f.write(pptx_bytes)
+
+    _handle_errors(
+        jira_client.attach_file,
+        issue_key,
+        f"{feature_name}_Executive_Summary.pptx",
+        pptx_bytes,
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    )
+
+    return schemas.ExecSummaryResult(
+        file_id=file_id, source=source, source_filename=source_filename
+    )
+
+
 def _run_roadmap_options(db: Session, project: models.Project, node: models.WorkflowNode) -> dict:
     capacity_node = (
         db.query(models.WorkflowNode)
@@ -478,11 +558,13 @@ def download_file(file_id: str):
     path = os.path.join(GENERATED_FILES_DIR, safe_name)
     if not os.path.isfile(path):
         raise HTTPException(status_code=404, detail="File not found.")
-    return FileResponse(
-        path,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        filename="Draft_Multi_Year_Roadmap_Options.docx",
-    )
+    if safe_name.endswith(".pptx"):
+        media_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        filename = "Exec_Feature_Summary.pptx"
+    else:
+        media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        filename = "Draft_Multi_Year_Roadmap_Options.docx"
+    return FileResponse(path, media_type=media_type, filename=filename)
 
 
 @router.get("/jira/fields")
