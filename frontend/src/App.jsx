@@ -187,6 +187,14 @@ function Phase2Board() {
 
   return (
     <div className="phase2-board">
+      <a
+        className="phase2-template-link"
+        href="https://github.com/peggymccormick101/Program-Pilot/blob/main/Feature_Technical_Specification_Template_v1.docx"
+        target="_blank"
+        rel="noreferrer"
+      >
+        Feature Technical Specification Template (reference for Requirements &amp; Architecture)
+      </a>
       {loadError && <p className="load-error">{loadError}</p>}
       {features === null && !loadError && <p>Loading Features for this release...</p>}
       {features && features.length === 0 && (

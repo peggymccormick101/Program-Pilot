@@ -456,6 +456,19 @@ h2, h3 {
   margin-top: 12px;
 }
 
+.phase2-template-link {
+  display: inline-block;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--phase-2);
+  text-decoration: none;
+}
+
+.phase2-template-link:hover {
+  text-decoration: underline;
+}
+
 .feature-state-list {
   display: flex;
   flex-direction: column;
