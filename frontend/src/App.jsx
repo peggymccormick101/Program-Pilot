@@ -256,8 +256,9 @@ function ExecSummaryStep({ feature, busy, error, result, onGenerate }) {
           <span className="step-title">Generate Executive Feature Summary</span>
         </div>
         <p className="step-description">
-          Generates a single-slide executive summary from this Feature's Technical Specification
-          Document -- pulled automatically from its Jira attachments, or uploaded directly below.
+          Uses AI to generate a single-slide executive summary from this Feature's Technical
+          Specification Document -- pulled automatically from its Jira attachments, or uploaded
+          directly below.
         </p>
 
         {!locked && (
