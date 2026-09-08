@@ -330,16 +330,19 @@ def select_release(payload: schemas.SelectReleaseRequest, db: Session = Depends(
 # Phase 2 (Quarterly Release Initiation) tracks progress per Feature,
 # not on the program's own WorkflowNode tree -- each Feature already
 # has a stable Jira key, so its state is read/written directly on that
-# Feature's own issue rather than mirrored locally. "Generate Exec
-# Feature Summary" isn't part of this sequence -- it's a standalone
-# action for the whole release, not a per-Feature state.
+# Feature's own issue rather than mirrored locally.
+#
+# "Commit the Release" and "Update the Roadmap & Jira" are release-level
+# actions, not per-Feature ones -- they only make sense once every
+# Feature in the release has reached the last state below, so they are
+# not tracked in this per-Feature sequence. "Generate Exec Feature
+# Summary" isn't part of this sequence either -- it's a standalone
+# action, not a state.
 FEATURE_STATE_SEQUENCE = [
     "RequirementsApproved",
     "ArchitectureApproved",
     "EpicsDefined",
     "DevEstimated",
-    "FeatureCommitted",
-    "RoadmapJiraUpdated",
 ]
 
 

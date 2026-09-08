@@ -72,7 +72,17 @@ function CapacityForm({ node, busyId, onSubmitCapacity }) {
   );
 }
 
-function StepRow({ node, busyId, nodeErrors, onComplete, onRun, onReopen, onSubmitCapacity, allowUndo = true }) {
+function StepRow({
+  node,
+  busyId,
+  nodeErrors,
+  onComplete,
+  onRun,
+  onReopen,
+  onSubmitCapacity,
+  allowUndo = true,
+  disabledReason,
+}) {
   const isBusy = busyId === node.id;
   const isAutomated = node.automation_type === "automated";
   const isInput = node.automation_type === "input";
@@ -102,12 +112,20 @@ function StepRow({ node, busyId, nodeErrors, onComplete, onRun, onReopen, onSubm
 
       <div className="step-actions">
         {node.status === "available" && node.automation_type === "manual" && (
-          <button onClick={() => onComplete(node.id)} disabled={isBusy}>
+          <button
+            onClick={() => onComplete(node.id)}
+            disabled={isBusy || !!disabledReason}
+            title={disabledReason || undefined}
+          >
             {isBusy ? "Saving..." : "Mark complete"}
           </button>
         )}
         {node.status === "available" && isAutomated && (
-          <button onClick={() => onRun(node.id)} disabled={isBusy}>
+          <button
+            onClick={() => onRun(node.id)}
+            disabled={isBusy || !!disabledReason}
+            title={disabledReason || undefined}
+          >
             {isBusy ? "Running..." : "Run"}
           </button>
         )}
@@ -138,15 +156,53 @@ function WorkflowNode({ node, ...actions }) {
 }
 
 // Titles match exactly what's tracked in Jira's per-Feature "Feature
-// State" field (see backend FEATURE_STATE_SEQUENCE) -- description is
-// left blank for now, ready for explanatory text once supplied.
+// State" field (see backend FEATURE_STATE_SEQUENCE).
 const PHASE2_STEPS = [
-  { title: "Define & Review Requirements", state: "RequirementsApproved", description: null },
-  { title: "Define & Review Architecture", state: "ArchitectureApproved", description: null },
-  { title: "Define Epics", state: "EpicsDefined", description: null },
-  { title: "Estimate Epics (development)", state: "DevEstimated", description: null },
-  { title: "Commit the Release", state: "FeatureCommitted", description: null },
-  { title: "Update the Roadmap & Jira", state: "RoadmapJiraUpdated", description: null },
+  {
+    title: "Define & Review Requirements",
+    state: "RequirementsApproved",
+    description:
+      "Use the Feature Technical Specification Document template (link above), fill in the General " +
+      "Information as well as sections 1 and 2, review with architecture and development, update from " +
+      "comments and mark complete once approved.",
+  },
+  {
+    title: "Define & Review Architecture",
+    state: "ArchitectureApproved",
+    description:
+      "Use the Feature Technical Specification Document populated with requirements for this feature, " +
+      "add section 3, review with product management and development, incorporate comments. Once " +
+      "approved, store the document, communicate the location and status and mark this task complete.",
+  },
+  {
+    title: "Define Epics",
+    state: "EpicsDefined",
+    description:
+      "Use AI to generate draft Epics for this feature. Once the draft is refined, reviewed, approved " +
+      "and in Jira, mark this task complete.",
+  },
+  {
+    title: "Estimate Epics (development)",
+    state: "DevEstimated",
+    description: "Have development provide front and backend estimates in Jira, then mark this task complete.",
+  },
+];
+
+// Release-level actions -- unlike the steps above, these apply once for
+// the whole release rather than once per Feature, so they aren't part
+// of FEATURE_STATE_SEQUENCE and only unlock once every Feature in the
+// release has reached the last step above (DevEstimated).
+const RELEASE_STEPS = [
+  {
+    title: "Commit the Release",
+    description:
+      "Once every Feature in this release has been estimated, request AI to provide commitment " +
+      "options, review and refine the options, then select which Features will be committed to the release.",
+  },
+  {
+    title: "Update the Roadmap & Jira",
+    description: "Update the roadmap and Jira to reflect the Features committed to this release.",
+  },
 ];
 
 // Builds WorkflowNodeOut-shaped virtual nodes for the selected Feature,
@@ -171,7 +227,56 @@ function buildFeatureStepNodes(feature) {
   }));
 }
 
-function Phase2Board({ feature, busy, error, onAdvance }) {
+// "Generate Exec Feature Summary" isn't tied to a Feature State value --
+// it just needs to show up once Requirements have been reviewed. Its
+// own behavior isn't defined yet, so it's shown disabled for now.
+function buildExecSummaryNode(feature) {
+  return {
+    id: "exec-summary",
+    title: "Generate Exec Feature Summary",
+    description: "Details for this step are still being defined.",
+    phase_number: 2,
+    is_leaf: true,
+    automation_type: "manual",
+    ai_harness: null,
+    status: feature.state_index >= 0 ? "available" : "locked",
+    completed_at: null,
+    output: null,
+    output_file_id: null,
+    children: [],
+  };
+}
+
+// A container node for the two release-level steps, so they render
+// through WorkflowNode's group styling exactly like a Phase 1 task
+// group. Locked until every Feature in the release has been estimated;
+// the actions themselves aren't wired up to Jira yet.
+function buildReleaseActionsNode(features) {
+  const allEstimated =
+    !!features && features.length > 0 && features.every((f) => f.state_index >= PHASE2_STEPS.length - 1);
+  return {
+    id: "release-actions",
+    title: "Release Actions (once every Feature in this release is estimated)",
+    phase_number: 2,
+    is_leaf: false,
+    children: RELEASE_STEPS.map((step, i) => ({
+      id: `release-action-${i}`,
+      title: step.title,
+      description: step.description,
+      phase_number: 2,
+      is_leaf: true,
+      automation_type: "manual",
+      ai_harness: null,
+      status: allEstimated ? "available" : "locked",
+      completed_at: null,
+      output: null,
+      output_file_id: null,
+      children: [],
+    })),
+  };
+}
+
+function Phase2Board({ feature, features, busy, error, onAdvance }) {
   const stepNodes = feature ? buildFeatureStepNodes(feature) : [];
   // Only the "available" (next) step is ever clickable, so a single
   // shared busyId is enough -- StepRow compares it against each node's
@@ -180,6 +285,8 @@ function Phase2Board({ feature, busy, error, onAdvance }) {
   const nextStep = feature ? PHASE2_STEPS[feature.state_index + 1] : null;
   const busyId = busy && nextStep ? nextStep.state : null;
   const nodeErrors = error && nextStep ? { [nextStep.state]: error } : {};
+  const releaseActionsNode = buildReleaseActionsNode(features);
+
   return (
     <div className="phase2-board">
       <a
@@ -195,7 +302,28 @@ function Phase2Board({ feature, busy, error, onAdvance }) {
 
       {feature && (
         <div className="task-group-children">
-          {stepNodes.map((node) => (
+          <WorkflowNode
+            node={stepNodes[0]}
+            busyId={busyId}
+            nodeErrors={nodeErrors}
+            onComplete={() => onAdvance(feature)}
+            onRun={() => {}}
+            onReopen={() => {}}
+            onSubmitCapacity={() => {}}
+            allowUndo={false}
+          />
+          <WorkflowNode
+            node={buildExecSummaryNode(feature)}
+            busyId={null}
+            nodeErrors={{}}
+            onComplete={() => {}}
+            onRun={() => {}}
+            onReopen={() => {}}
+            onSubmitCapacity={() => {}}
+            allowUndo={false}
+            disabledReason="Not yet wired up -- instructions for this step are coming."
+          />
+          {stepNodes.slice(1).map((node) => (
             <WorkflowNode
               key={node.id}
               node={node}
@@ -211,11 +339,17 @@ function Phase2Board({ feature, busy, error, onAdvance }) {
         </div>
       )}
 
-      <div className="phase2-summary-action">
-        <button className="ghost-button" disabled title="Not yet wired up">
-          Generate Exec Feature Summary
-        </button>
-      </div>
+      <WorkflowNode
+        node={releaseActionsNode}
+        busyId={null}
+        nodeErrors={{}}
+        onComplete={() => {}}
+        onRun={() => {}}
+        onReopen={() => {}}
+        onSubmitCapacity={() => {}}
+        allowUndo={false}
+        disabledReason="Not yet wired up to Jira."
+      />
     </div>
   );
 }
@@ -232,7 +366,7 @@ function PhaseCard({
 }) {
   const phaseClass = PHASE_CLASS[phase.phase_number];
   const isPhase2 = phase.phase_number === 2;
-  const allPhase2Complete =
+  const allFeaturesEstimated =
     isPhase2 &&
     phase2Features &&
     phase2Features.length > 0 &&
@@ -247,8 +381,8 @@ function PhaseCard({
           {!active && !isPhase2 && <p className="phase-coming-soon">Coming soon</p>}
         </div>
         {isPhase2 ? (
-          <span className={`status-badge status-${allPhase2Complete ? "complete" : "in_progress"}`}>
-            {allPhase2Complete ? "Complete" : "Active"}
+          <span className={`status-badge status-${allFeaturesEstimated ? "complete" : "in_progress"}`}>
+            {allFeaturesEstimated ? "All Features Estimated" : "Active"}
           </span>
         ) : (
           <StatusBadge status={phase.status} />
@@ -264,6 +398,7 @@ function PhaseCard({
       ) : isPhase2 ? (
         <Phase2Board
           feature={selectedFeature}
+          features={phase2Features}
           busy={phase2Busy}
           error={phase2Error}
           onAdvance={onAdvancePhase2Feature}
