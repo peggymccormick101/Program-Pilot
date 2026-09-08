@@ -357,7 +357,16 @@ def list_phase2_features(db: Session = Depends(get_db)):
     results = []
     for f in features:
         state = _normalize_field_value(f.get("feature_state"))
-        state_index = FEATURE_STATE_SEQUENCE.index(state) if state in FEATURE_STATE_SEQUENCE else -1
+        if state in FEATURE_STATE_SEQUENCE:
+            state_index = FEATURE_STATE_SEQUENCE.index(state)
+        elif state:
+            # A Feature can be further along than Phase 2 tracks -- this
+            # same field carries states for later phases too (not built
+            # yet), so an unrecognized non-null value means "already
+            # past Phase 2", not "not started".
+            state_index = len(FEATURE_STATE_SEQUENCE) - 1
+        else:
+            state_index = -1
         results.append(
             schemas.FeatureStateOut(
                 issue_key=f["issue_key"],
