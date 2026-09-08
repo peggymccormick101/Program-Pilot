@@ -357,16 +357,12 @@ def list_phase2_features(db: Session = Depends(get_db)):
     results = []
     for f in features:
         state = _normalize_field_value(f.get("feature_state"))
-        if state in FEATURE_STATE_SEQUENCE:
-            state_index = FEATURE_STATE_SEQUENCE.index(state)
-        elif state:
-            # A Feature can be further along than Phase 2 tracks -- this
-            # same field carries states for later phases too (not built
-            # yet), so an unrecognized non-null value means "already
-            # past Phase 2", not "not started".
-            state_index = len(FEATURE_STATE_SEQUENCE) - 1
-        else:
-            state_index = -1
+        # Only count a value we actually recognize as progress. A
+        # not-yet-mapped value (a later phase's state once that's
+        # built, or an unrelated default Jira put on a brand-new field)
+        # reads as "not started" rather than guessing it means "done" --
+        # guessing wrong here disables every action button.
+        state_index = FEATURE_STATE_SEQUENCE.index(state) if state in FEATURE_STATE_SEQUENCE else -1
         results.append(
             schemas.FeatureStateOut(
                 issue_key=f["issue_key"],
