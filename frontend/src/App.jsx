@@ -228,8 +228,9 @@ function buildFeatureStepNodes(feature) {
   }));
 }
 
-// "Generate Exec Feature Summary" isn't tied to a Feature State value --
-// it just needs to show up once Requirements have been reviewed. It
+// "Generate Executive Feature Summary" isn't tied to a Feature State
+// value or a single point in the sequence -- it can be run any time
+// once Requirements is complete, so it carries no status badge. It
 // tries to pull the Feature Technical Specification Document straight
 // from the Feature's own Jira attachments first (by filename), falling
 // back to a manual upload if none is found there.
@@ -252,8 +253,7 @@ function ExecSummaryStep({ feature, busy, error, result, onGenerate }) {
     <div className={`step-row ${locked ? "step-locked" : "step-available"}`}>
       <div className="step-main">
         <div className="step-title-row">
-          <span className="step-title">Generate Exec Feature Summary</span>
-          <StatusBadge status={locked ? "locked" : result ? "complete" : "available"} />
+          <span className="step-title">Generate Executive Feature Summary</span>
         </div>
         <p className="step-description">
           Generates a single-slide executive summary from this Feature's Technical Specification
@@ -288,7 +288,7 @@ function ExecSummaryStep({ feature, busy, error, result, onGenerate }) {
         {error && <p className="step-error">{error}</p>}
         {result && (
           <a className="step-download" href={downloadUrl(result.file_id)}>
-            Download Exec Feature Summary (.pptx)
+            Download Executive Feature Summary (.pptx)
           </a>
         )}
       </div>

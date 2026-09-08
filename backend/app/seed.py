@@ -111,7 +111,7 @@ PLACEHOLDER_PHASES = [
         "Estimate Epics (development)",
         "Commit the Release",
         "Update the Roadmap & Jira",
-        "Generate Exec Feature Summary",
+        "Generate Executive Feature Summary",
     ]),
     (3, "Release Planning", [
         "Document Design",

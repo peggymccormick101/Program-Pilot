@@ -219,7 +219,7 @@ EXEC_SUMMARY_SCHEMA = {
 
 
 def generate_exec_feature_summary(ftsd_text: str, feature_name: str) -> dict:
-    """Phase 2's "Generate Exec Feature Summary" step. Returns structured
+    """Phase 2's "Generate Executive Feature Summary" step. Returns structured
     data; app/exec_summary_pptx.py renders it into the single-slide
     executive deck the workflow step promises, matching the layout of
     the reference slide the user approved."""

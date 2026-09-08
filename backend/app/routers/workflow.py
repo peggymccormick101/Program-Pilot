@@ -406,7 +406,7 @@ def advance_phase2_feature(
 def _find_ftsd_attachment(issue_key: str) -> dict | None:
     """The most recent attachment on the Feature's own issue whose name
     looks like a Feature Technical Specification Document -- lets
-    "Generate Exec Feature Summary" pull it automatically instead of
+    "Generate Executive Feature Summary" pull it automatically instead of
     requiring a re-upload, as long as the user attached it with a
     recognizable name. Never guesses past that: no match, no auto-pull."""
     attachments = jira_client.get_issue_attachments(issue_key)
@@ -560,7 +560,7 @@ def download_file(file_id: str):
         raise HTTPException(status_code=404, detail="File not found.")
     if safe_name.endswith(".pptx"):
         media_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        filename = "Exec_Feature_Summary.pptx"
+        filename = "Executive_Feature_Summary.pptx"
     else:
         media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         filename = "Draft_Multi_Year_Roadmap_Options.docx"
