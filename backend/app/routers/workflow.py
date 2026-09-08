@@ -382,10 +382,13 @@ def list_phase2_features(db: Session = Depends(get_db)):
 def advance_phase2_feature(
     issue_key: str, payload: schemas.AdvanceFeatureStateRequest, db: Session = Depends(get_db)
 ):
-    if payload.current_state is None:
+    if payload.current_state is None or payload.current_state not in FEATURE_STATE_SEQUENCE:
+        # Matches list_phase2_features' treatment of an unrecognized value
+        # (a leftover value from before FEATURE_STATE_SEQUENCE was
+        # trimmed, or an unrelated default) as "not started" -- rejecting
+        # it here instead would strand any real Feature already carrying
+        # one of the removed values.
         next_index = 0
-    elif payload.current_state not in FEATURE_STATE_SEQUENCE:
-        raise HTTPException(status_code=400, detail="Unknown feature state.")
     else:
         current_index = FEATURE_STATE_SEQUENCE.index(payload.current_state)
         if current_index >= len(FEATURE_STATE_SEQUENCE) - 1:
